@@ -24,13 +24,14 @@ export default function Home() {
         <h1 className="text-4xl font-bold text-blue-400">Federated Learning Dashboard</h1>
       </div>
 
-      <div className="relative z-[-1] flex place-items-center">
-        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700">
-          <h2 className="text-2xl font-semibold mb-4 text-blue-300">Training Status</h2>
+      <div className="relative z-10 flex w-full max-w-2xl place-items-center my-8">
+        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl border border-gray-700 w-full text-center lg:text-left">
+          <h2 className="text-3xl font-semibold mb-6 text-blue-300">Training Status</h2>
           {status ? (
-            <div className="space-y-2">
-              <p>Total Nodes Connected: <span className="font-bold text-green-400">{status.totalNodes}</span></p>
-              <p>Nodes: {status.connectedNodes?.join(", ")}</p>
+            <div className="space-y-4 text-lg">
+              <p>Current Global Round: <span className="font-bold text-yellow-500 text-2xl">{status.currentRound !== undefined ? status.currentRound : 0}</span></p>
+              <p>Total Nodes Connected: <span className="font-bold text-green-400 text-2xl">{status.totalNodes}</span></p>
+              <p className="text-gray-400 text-sm mt-4">Active Nodes IDs: {status.connectedNodes?.join(", ")}</p>
             </div>
           ) : (
             <p className="text-gray-400 animate-pulse">Waiting for aggregator data or network error...</p>
