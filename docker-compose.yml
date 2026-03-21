@@ -1,0 +1,40 @@
+services:
+  aggregator:
+    build: ./aggregator
+    ports:
+      - "8080:8080"
+    networks:
+      - fl-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - aggregator
+    networks:
+      - fl-network
+
+  node_client_1:
+    build: ./node_client
+    environment:
+      - AGGREGATOR_URL=http://aggregator:8080/api/weights
+      - NODE_ID=node-1
+    depends_on:
+      - aggregator
+    networks:
+      - fl-network
+
+  node_client_2:
+    build: ./node_client
+    environment:
+      - AGGREGATOR_URL=http://aggregator:8080/api/weights
+      - NODE_ID=node-2
+    depends_on:
+      - aggregator
+    networks:
+      - fl-network
+
+networks:
+  fl-network:
+    driver: bridge

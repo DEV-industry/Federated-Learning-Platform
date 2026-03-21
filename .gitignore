@@ -1,0 +1,37 @@
+# IDE / System
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/npm-debug.log*
+frontend/yarn-error.log*
+frontend/yarn-debug.log*
+frontend/.pnp.*
+frontend/.env.local
+
+# Aggregator (Java Spring Boot)
+aggregator/target/
+aggregator/*.jar
+aggregator/.mvn/wrapper/maven-wrapper.jar
+aggregator/dependency-reduced-pom.xml
+
+# Node Client (Python)
+node_client/venv/
+node_client/env/
+node_client/.env/
+node_client/__pycache__/
+node_client/*.pyc
+node_client/*.pyo
+node_client/.pytest_cache/
+node_client/.coverage
+
+# Docker
+.dockerise/
