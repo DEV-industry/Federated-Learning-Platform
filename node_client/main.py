@@ -113,11 +113,11 @@ def train_and_send():
         avg_loss = running_loss / len(dataloader)
         print(f"[{NODE_ID}] Finished epoch. Average Loss: {avg_loss:.4f}")
 
-        # 4. Flatten and send updated weights back to aggregator
+        # 4. Flatten and send updated weights back to aggregator, including average loss
         trained_weights = flatten_weights(model)
-        print(f"[{NODE_ID}] Sending updated weights to Aggregator...")
+        print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_URL, json={"nodeId": NODE_ID, "weights": trained_weights})
+            response = requests.post(AGGREGATOR_URL, json={"nodeId": NODE_ID, "weights": trained_weights, "loss": avg_loss})
             print(f"[{NODE_ID}] Aggregator response: {response.json()}")
         except Exception as e:
             print(f"[{NODE_ID}] Failed to send weights: {e}")

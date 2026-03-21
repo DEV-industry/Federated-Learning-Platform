@@ -15,6 +15,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AggregatorApplication {
 
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
+    private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
+    private final List<Map<String, Object>> lossHistory = new ArrayList<>();
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
     private final int EXPECTED_NODES = 2;
@@ -27,6 +29,9 @@ public class AggregatorApplication {
     public synchronized Map<String, Object> receiveWeights(@RequestBody WeightPayload payload) {
         System.out.println("Received weights from " + payload.getNodeId());
         nodeWeights.put(payload.getNodeId(), payload.getWeights());
+        if (payload.getLoss() != null) {
+            nodeLosses.put(payload.getNodeId(), payload.getLoss());
+        }
         
         // Check if all expected nodes have submitted their weights
         if (nodeWeights.size() >= EXPECTED_NODES) {
@@ -54,12 +59,26 @@ public class AggregatorApplication {
             newGlobalWeights.add(sum / allWeights.size());
         }
         
+        // Calculate average loss over expected nodes
+        double avgLoss = 0.0;
+        if (!nodeLosses.isEmpty()) {
+            for (Double loss : nodeLosses.values()) {
+                avgLoss += loss;
+            }
+            avgLoss /= nodeLosses.size();
+            Map<String, Object> roundData = new ConcurrentHashMap<>();
+            roundData.put("round", currentRound + 1);
+            roundData.put("loss", avgLoss);
+            lossHistory.add(roundData);
+        }
+
         // Update global state
         this.globalWeights = newGlobalWeights;
         this.currentRound++;
         
         // Clear nodes' submissions for the next round
         this.nodeWeights.clear();
+        this.nodeLosses.clear();
         
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound);
     }
@@ -80,14 +99,22 @@ public class AggregatorApplication {
             "globalWeights", globalWeights
         );
     }
+
+    @GetMapping("/history")
+    public List<Map<String, Object>> getHistory() {
+        return lossHistory;
+    }
 }
 
 class WeightPayload {
     private String nodeId;
     private List<Double> weights;
+    private Double loss;
     
     public String getNodeId() { return nodeId; }
     public void setNodeId(String nodeId) { this.nodeId = nodeId; }
     public List<Double> getWeights() { return weights; }
     public void setWeights(List<Double> weights) { this.weights = weights; }
+    public Double getLoss() { return loss; }
+    public void setLoss(Double loss) { this.loss = loss; }
 }
