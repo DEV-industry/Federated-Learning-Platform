@@ -5,11 +5,17 @@ export default function Home() {
   const [status, setStatus] = useState<any>(null);
 
   useEffect(() => {
-    // In a real app, you would fetch from the aggregator API.
-    fetch("http://localhost:8080/api/status")
-      .then((res) => res.json())
-      .then((data) => setStatus(data))
-      .catch((err) => console.error(err));
+    const fetchStatus = () => {
+      fetch("http://localhost:8080/api/status")
+        .then((res) => res.json())
+        .then((data) => setStatus(data))
+        .catch((err) => console.error(err));
+    };
+
+    fetchStatus();
+    const intervalId = setInterval(fetchStatus, 2000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   return (
