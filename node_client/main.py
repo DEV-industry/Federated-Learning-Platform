@@ -14,6 +14,8 @@ app = FastAPI()
 AGGREGATOR_URL = os.getenv("AGGREGATOR_URL", "http://aggregator:8080/api/weights")
 GLOBAL_MODEL_URL = AGGREGATOR_URL.replace("/weights", "/global-model")
 NODE_ID = os.getenv("NODE_ID", "node-1")
+DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
+DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
 
 class MNISTModel(nn.Module):
     def __init__(self):
@@ -125,11 +127,31 @@ def train_and_send():
         avg_loss = running_loss / len(dataloader)
         print(f"[{NODE_ID}] Finished epoch. Average Loss: {avg_loss:.4f}")
 
-        # 4. Flatten and send updated weights back to aggregator, including average loss
-        trained_weights = flatten_weights(model)
+        # 4. Flatten and apply DP (if enabled), then send updated weights back to aggregator, including average loss
+        trained_weights_list = flatten_weights(model)
+        
+        if DP_ENABLED:
+            weights_tensor = torch.tensor(trained_weights_list)
+            max_norm = 1.0
+            l2_norm = torch.norm(weights_tensor, p=2)
+            if l2_norm > max_norm:
+                weights_tensor = weights_tensor * (max_norm / l2_norm)
+                
+            noise = torch.normal(mean=0.0, std=DP_NOISE_MULTIPLIER * max_norm, size=weights_tensor.size())
+            weights_tensor = weights_tensor + noise
+            trained_weights = weights_tensor.tolist()
+            print(f"[{NODE_ID}] Applied Local DP: clipped L2 norm={l2_norm:.4f}, noise std={DP_NOISE_MULTIPLIER * max_norm}")
+        else:
+            trained_weights = trained_weights_list
+
         print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_URL, json={"nodeId": NODE_ID, "weights": trained_weights, "loss": avg_loss})
+            response = requests.post(AGGREGATOR_URL, json={
+                "nodeId": NODE_ID, 
+                "weights": trained_weights, 
+                "loss": avg_loss,
+                "dpEnabled": DP_ENABLED
+            })
             print(f"[{NODE_ID}] Aggregator response: {response.json()}")
         except Exception as e:
             print(f"[{NODE_ID}] Failed to send weights: {e}")

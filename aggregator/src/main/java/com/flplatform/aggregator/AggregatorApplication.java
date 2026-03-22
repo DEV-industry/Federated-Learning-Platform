@@ -33,6 +33,7 @@ public class AggregatorApplication {
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
     private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
     private final Map<String, Integer> nodeRejectionCount = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> nodeDpStatus = new ConcurrentHashMap<>();
     
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
@@ -57,6 +58,11 @@ public class AggregatorApplication {
         nodeWeights.put(payload.getNodeId(), payload.getWeights());
         if (payload.getLoss() != null) {
             nodeLosses.put(payload.getNodeId(), payload.getLoss());
+        }
+        if (payload.getDpEnabled() != null) {
+            nodeDpStatus.put(payload.getNodeId(), payload.getDpEnabled());
+        } else {
+            nodeDpStatus.put(payload.getNodeId(), false);
         }
         
         if (nodeWeights.size() >= expectedNodes) {
@@ -183,6 +189,7 @@ public class AggregatorApplication {
         this.nodeLosses.clear();
         this.nodeSecurityStatus.clear();
         this.nodeRejectionCount.clear();
+        this.nodeDpStatus.clear();
         System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
         return Map.of("status", "success", "message", "Training reset to round 0.");
     }
@@ -202,11 +209,13 @@ public class AggregatorApplication {
                 status = nodeSecurityStatus.get(nodeId);
             }
             int rejections = nodeRejectionCount.getOrDefault(nodeId, 0);
+            boolean dpEnabled = nodeDpStatus.getOrDefault(nodeId, false);
             
             nodeDetails.add(Map.of(
                 "nodeId", nodeId,
                 "status", status,
-                "rejectedRounds", rejections
+                "rejectedRounds", rejections,
+                "dpEnabled", dpEnabled
             ));
         }
 
@@ -267,6 +276,7 @@ class WeightPayload {
     private String nodeId;
     private List<Double> weights;
     private Double loss;
+    private Boolean dpEnabled;
     
     public String getNodeId() { return nodeId; }
     public void setNodeId(String nodeId) { this.nodeId = nodeId; }
@@ -274,4 +284,6 @@ class WeightPayload {
     public void setWeights(List<Double> weights) { this.weights = weights; }
     public Double getLoss() { return loss; }
     public void setLoss(Double loss) { this.loss = loss; }
+    public Boolean getDpEnabled() { return dpEnabled; }
+    public void setDpEnabled(Boolean dpEnabled) { this.dpEnabled = dpEnabled; }
 }

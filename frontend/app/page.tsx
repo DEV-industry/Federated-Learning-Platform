@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Activity, Server, Target, GitBranch, Cpu, Trophy, Download, Settings } from "lucide-react";
+import { Activity, Server, Target, GitBranch, Cpu, Trophy, Download, Settings, ShieldCheck } from "lucide-react";
 
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
@@ -221,6 +221,12 @@ export default function Home() {
                        </span>
                        <span className={`font-black font-mono ${node.rejectedRounds > 0 ? 'text-red-400' : 'text-gray-400'}`}>{node.rejectedRounds}</span>
                      </div>
+                     {node.dpEnabled && (
+                       <div className="flex items-center gap-1 mt-2 mb-1 w-fit bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-1 rounded-md text-xs font-bold tracking-wide uppercase shadow-sm">
+                         <ShieldCheck className="w-3.5 h-3.5" />
+                         DP-Secured
+                       </div>
+                     )}
                    </div>
                  );
                })

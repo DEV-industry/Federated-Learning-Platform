@@ -38,6 +38,8 @@ services:
     environment:
       - AGGREGATOR_URL=http://aggregator:8080/api/weights
       - NODE_ID=node-1
+      - DP_ENABLED=true
+      - DP_NOISE_MULTIPLIER=0.01
     depends_on:
       - aggregator
     networks:
@@ -48,6 +50,8 @@ services:
     environment:
       - AGGREGATOR_URL=http://aggregator:8080/api/weights
       - NODE_ID=node-2
+      - DP_ENABLED=true
+      - DP_NOISE_MULTIPLIER=0.01
     depends_on:
       - aggregator
     networks:
