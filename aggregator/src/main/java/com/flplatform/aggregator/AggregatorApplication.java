@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,8 +26,13 @@ public class AggregatorApplication {
     @Autowired
     private RoundRepository roundRepository;
 
+    @Value("${fl.security.threshold:5.0}")
+    private double safetyThreshold;
+
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
+    private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
+    private final Map<String, Integer> nodeRejectionCount = new ConcurrentHashMap<>();
     
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
@@ -60,32 +67,87 @@ public class AggregatorApplication {
     }
 
     @PostMapping("/config")
-    public synchronized Map<String, Object> updateConfig(@RequestBody Map<String, Integer> config) {
+    public synchronized Map<String, Object> updateConfig(@RequestBody Map<String, Object> config) {
+        boolean updated = false;
+        StringBuilder message = new StringBuilder("Config updated: ");
+        
         if (config.containsKey("expectedNodes")) {
-            this.expectedNodes = config.get("expectedNodes");
+            this.expectedNodes = ((Number) config.get("expectedNodes")).intValue();
+            message.append("expectedNodes=").append(this.expectedNodes).append(" ");
+            updated = true;
+        }
+        
+        if (config.containsKey("safetyThreshold")) {
+            this.safetyThreshold = ((Number) config.get("safetyThreshold")).doubleValue();
+            message.append("safetyThreshold=").append(this.safetyThreshold).append(" ");
+            updated = true;
+        }
+
+        if (updated) {
             if (this.nodeWeights.size() >= this.expectedNodes) {
                 aggregateWeights();
             }
-            return Map.of("status", "success", "message", "Expected nodes updated to " + this.expectedNodes);
+            return Map.of("status", "success", "message", message.toString().trim());
         }
+        
         return Map.of("status", "error", "message", "Invalid config payload");
+    }
+
+    private double calculateDistance(List<Double> w1, List<Double> w2) {
+        if (w1 == null || w2 == null || w1.size() != w2.size()) {
+            return Double.MAX_VALUE;
+        }
+        double sumSq = 0.0;
+        for (int i = 0; i < w1.size(); i++) {
+            double diff = w1.get(i) - w2.get(i);
+            sumSq += diff * diff;
+        }
+        return Math.sqrt(sumSq);
     }
 
     private void aggregateWeights() {
         System.out.println("Starting FedAvg for round " + (currentRound + 1) + "...");
         
-        List<List<Double>> allWeights = new ArrayList<>(nodeWeights.values());
-        if (allWeights.isEmpty() || allWeights.get(0) == null) return;
-        
-        int numParams = allWeights.get(0).size();
+        List<List<Double>> validWeights = new ArrayList<>();
+        int prevRoundParamCount = this.globalWeights != null ? this.globalWeights.size() : 0;
+
+        for (Map.Entry<String, List<Double>> entry : nodeWeights.entrySet()) {
+            String nodeId = entry.getKey();
+            List<Double> w = entry.getValue();
+
+            if (this.currentRound == 0 || prevRoundParamCount == 0) {
+                // First round: trust everyone
+                nodeSecurityStatus.put(nodeId, "Accepted");
+                validWeights.add(w);
+            } else {
+                double distance = calculateDistance(w, this.globalWeights);
+                if (distance > this.safetyThreshold) {
+                    System.out.println("SUSPICIOUS node detected: " + nodeId + " with distance " + distance);
+                    nodeSecurityStatus.put(nodeId, "Rejected");
+                    nodeRejectionCount.put(nodeId, nodeRejectionCount.getOrDefault(nodeId, 0) + 1);
+                } else {
+                    nodeSecurityStatus.put(nodeId, "Accepted");
+                    validWeights.add(w);
+                }
+            }
+        }
+
+        if (validWeights.isEmpty()) {
+            System.out.println("All nodes rejected in round " + (currentRound + 1) + ". Round skipped.");
+            this.nodeWeights.clear();
+            this.nodeLosses.clear();
+            return;
+        }
+
+        int numParams = validWeights.get(0).size();
         List<Double> newGlobalWeights = new ArrayList<>(numParams);
         
         for (int i = 0; i < numParams; i++) {
             double sum = 0.0;
-            for (List<Double> nodeWeight : allWeights) {
+            for (List<Double> nodeWeight : validWeights) {
                 sum += nodeWeight.get(i);
             }
-            newGlobalWeights.add(sum / allWeights.size());
+            newGlobalWeights.add(sum / validWeights.size());
         }
         
         double avgLoss = 0.0;
@@ -119,17 +181,41 @@ public class AggregatorApplication {
         this.globalWeights.clear();
         this.nodeWeights.clear();
         this.nodeLosses.clear();
+        this.nodeSecurityStatus.clear();
+        this.nodeRejectionCount.clear();
         System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
         return Map.of("status", "success", "message", "Training reset to round 0.");
     }
 
     @GetMapping("/status")
     public Map<String, Object> getStatus() {
+        List<Map<String, Object>> nodeDetails = new ArrayList<>();
+        // Display details for nodes that have either connected currently or have been tracked in history.
+        // We will combine the list of keys from nodeWeights and nodeRejectionCount/nodeSecurityStatus.
+        java.util.Set<String> allActiveNodes = new java.util.HashSet<>();
+        allActiveNodes.addAll(nodeWeights.keySet());
+        allActiveNodes.addAll(nodeSecurityStatus.keySet());
+
+        for (String nodeId : allActiveNodes) {
+            String status = "Pending";
+            if (nodeSecurityStatus.containsKey(nodeId)) {
+                status = nodeSecurityStatus.get(nodeId);
+            }
+            int rejections = nodeRejectionCount.getOrDefault(nodeId, 0);
+            
+            nodeDetails.add(Map.of(
+                "nodeId", nodeId,
+                "status", status,
+                "rejectedRounds", rejections
+            ));
+        }
+
         return Map.of(
-            "connectedNodes", nodeWeights.keySet(),
             "totalNodes", nodeWeights.size(),
             "expectedNodes", expectedNodes,
-            "currentRound", currentRound
+            "currentRound", currentRound,
+            "safetyThreshold", safetyThreshold,
+            "nodeDetails", nodeDetails
         );
     }
 

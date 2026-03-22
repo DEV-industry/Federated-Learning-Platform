@@ -7,6 +7,7 @@ export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [expectedNodesInput, setExpectedNodesInput] = useState<string>("");
+  const [safetyThresholdInput, setSafetyThresholdInput] = useState<string>("");
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -16,6 +17,7 @@ export default function Home() {
           setStatus(data);
           // Only sync the input if the user hasn't typed anything to prevent annoying overrides
           if (!expectedNodesInput) setExpectedNodesInput(data.expectedNodes?.toString() || "2");
+          if (!safetyThresholdInput) setSafetyThresholdInput(data.safetyThreshold?.toString() || "5.0");
         })
         .catch((err) => console.error(err));
         
@@ -29,7 +31,7 @@ export default function Home() {
     const intervalId = setInterval(fetchStatus, 2000);
 
     return () => clearInterval(intervalId);
-  }, [expectedNodesInput]);
+  }, [expectedNodesInput, safetyThresholdInput]);
 
   const resetTraining = async () => {
     if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
@@ -47,9 +49,12 @@ export default function Home() {
       await fetch("http://localhost:8080/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedNodes: parseInt(expectedNodesInput) })
+        body: JSON.stringify({ 
+          expectedNodes: parseInt(expectedNodesInput),
+          safetyThreshold: parseFloat(safetyThresholdInput)
+        })
       });
-      alert(`Required aggregation nodes updated to ${expectedNodesInput}`);
+      alert(`Config updated! Required Nodes: ${expectedNodesInput}, Safety Threshold: ${safetyThresholdInput}`);
     } catch (err) {
       console.error(err);
     }
@@ -104,22 +109,36 @@ export default function Home() {
 
         {/* Configuration Panel */}
         <div className="mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-md">
-          <div className="flex items-center gap-2 text-gray-300">
-             <Settings className="w-5 h-5 text-gray-400" /> 
-             <span className="font-semibold">Dynamic Aggregator Node Target:</span>
-          </div>
-          <div className="flex items-center gap-3">
-             <input 
-               type="number" 
-               min="1"
-               max="100"
-               value={expectedNodesInput} 
-               onChange={(e) => setExpectedNodesInput(e.target.value)}
-               className="bg-black/40 border border-gray-600 rounded-lg px-4 py-2 w-24 text-center focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-             />
+          <div className="flex flex-col sm:flex-row items-center gap-6 text-gray-300 w-full justify-between">
+             <div className="flex flex-wrap items-center gap-6">
+                <div className="flex items-center gap-2">
+                   <Settings className="w-5 h-5 text-gray-400" /> 
+                   <span className="font-semibold text-sm">Target Nodes:</span>
+                   <input 
+                     type="number" 
+                     min="1"
+                     max="100"
+                     value={expectedNodesInput} 
+                     onChange={(e) => setExpectedNodesInput(e.target.value)}
+                     className="bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 w-20 text-center text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                   />
+                </div>
+                <div className="flex items-center gap-2">
+                   <span className="font-semibold text-sm">Safety Threshold:</span>
+                   <input 
+                     type="number" 
+                     step="0.1"
+                     min="0.1"
+                     max="100.0"
+                     value={safetyThresholdInput} 
+                     onChange={(e) => setSafetyThresholdInput(e.target.value)}
+                     className="bg-black/40 border border-gray-600 rounded-lg px-3 py-1.5 w-20 text-center text-sm focus:ring-2 focus:ring-red-500 outline-none transition-all"
+                   />
+                </div>
+             </div>
              <button 
                onClick={updateConfig}
-               className="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+               className="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
              >
                Apply Config
              </button>
@@ -172,6 +191,40 @@ export default function Home() {
               <Server className="w-4 h-4" /> Wait-State: <span className="font-bold ml-1 text-white">{status?.totalNodes || 0} / {status?.expectedNodes || '?'}</span>
             </p>
           </div>
+        </div>
+
+        {/* Security / Nodes Panel */}
+        <div className="mb-8 p-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
+           <h2 className="text-xl font-bold flex items-center gap-2 text-white mb-4">
+              <Server className="w-6 h-6 text-indigo-400"/> Connected Node Security Status
+           </h2>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             {(status?.nodeDetails && status.nodeDetails.length > 0) ? (
+               status.nodeDetails.map((node: any) => {
+                 const isRejected = node.status === "Rejected";
+                 const isAccepted = node.status === "Accepted";
+                 return (
+                   <div key={node.nodeId} className={`p-4 rounded-xl border flex flex-col gap-2 transition-all ${isRejected ? 'bg-red-500/10 border-red-500/30' : isAccepted ? 'bg-green-500/5 border-green-500/20' : 'bg-white/5 border-white/10'}`}>
+                     <div className="flex justify-between items-start">
+                       <span className="font-mono text-sm text-gray-300 font-bold max-w-[150px] truncate" title={node.nodeId}>{node.nodeId}</span>
+                       <span className={`px-2 py-0.5 rounded text-xs font-bold tracking-wider ${isRejected ? 'bg-red-500/20 text-red-500' : isAccepted ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                         {isRejected ? 'FILTERED' : isAccepted ? 'TRUSTED' : 'PENDING'}
+                       </span>
+                     </div>
+                     <div className="flex justify-between items-center mt-2 group relative">
+                       <span className="text-xs text-gray-500 uppercase tracking-widest font-semibold flex items-center gap-1">
+                          <Activity className="w-3 h-3"/> Rejected Rounds
+                       </span>
+                       <span className={`font-black font-mono ${node.rejectedRounds > 0 ? 'text-red-400' : 'text-gray-400'}`}>{node.rejectedRounds}</span>
+                     </div>
+                   </div>
+                 );
+               })
+             ) : (
+                <div className="text-gray-500 text-sm italic col-span-full border-2 border-dashed border-white/10 rounded-xl p-4 text-center">No active nodes connected to the aggregator.</div>
+             )}
+           </div>
         </div>
 
         {/* Dual Chart Section */}
