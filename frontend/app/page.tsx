@@ -1,17 +1,22 @@
 "use client";
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Activity, Server, Target, GitBranch, Cpu, Trophy } from "lucide-react";
+import { Activity, Server, Target, GitBranch, Cpu, Trophy, Download, Settings } from "lucide-react";
 
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [expectedNodesInput, setExpectedNodesInput] = useState<string>("");
 
   useEffect(() => {
     const fetchStatus = () => {
       fetch("http://localhost:8080/api/status")
         .then((res) => res.json())
-        .then((data) => setStatus(data))
+        .then((data) => {
+          setStatus(data);
+          // Only sync the input if the user hasn't typed anything to prevent annoying overrides
+          if (!expectedNodesInput) setExpectedNodesInput(data.expectedNodes?.toString() || "2");
+        })
         .catch((err) => console.error(err));
         
       fetch("http://localhost:8080/api/history")
@@ -24,7 +29,7 @@ export default function Home() {
     const intervalId = setInterval(fetchStatus, 2000);
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [expectedNodesInput]);
 
   const resetTraining = async () => {
     if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
@@ -37,24 +42,34 @@ export default function Home() {
     }
   };
 
+  const updateConfig = async () => {
+    try {
+      await fetch("http://localhost:8080/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedNodes: parseInt(expectedNodesInput) })
+      });
+      alert(`Required aggregation nodes updated to ${expectedNodesInput}`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const TARGET_ROUNDS = 100;
   const currentRound = status?.currentRound || 0;
   const progressPercentage = Math.min((currentRound / TARGET_ROUNDS) * 100, 100);
 
-  // Derive latest values securely
   const latestLoss = history.length > 0 ? history[history.length - 1].loss.toFixed(4) : "0.0000";
   const latestAccuracy = history.length > 0 ? (history[history.length - 1].accuracy * 100).toFixed(1) + "%" : "0.0%";
 
   return (
     <main className="min-h-screen bg-[#0B0F19] text-white selection:bg-blue-500 selection:text-white pb-20">
-      {/* Dynamic Background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-10%] left-[20%] w-[40%] h-[40%] bg-blue-600/10 blur-[150px] rounded-full mix-blend-screen" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-green-600/10 blur-[150px] rounded-full mix-blend-screen" />
       </div>
 
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16">
-        {/* Header */}
         <header className="mb-12 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h1 className="text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent flex items-center gap-3 tracking-tight">
@@ -64,6 +79,14 @@ export default function Home() {
             <p className="text-gray-400 mt-2 text-lg drop-shadow-sm">Decentralized AI Training Dashboard</p>
           </div>
           <div className="flex gap-4 items-center">
+            <a 
+              href="http://localhost:8080/api/model/download"
+              target="_blank"
+              download
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 border border-blue-400/50 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/20"
+            >
+              <Download className="w-4 h-4" /> Download .BIN
+            </a>
             <button 
               onClick={resetTraining}
               className="px-4 py-2 bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-semibold transition-colors"
@@ -73,15 +96,38 @@ export default function Home() {
             <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full backdrop-blur-md">
               <div className={`w-3 h-3 rounded-full animate-pulse ${status ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'bg-red-500'}`} />
               <span className="text-sm font-medium text-gray-200">
-                {status ? "System Online" : "Connecting to Aggregator..."}
+                {status ? "System Online" : "Connecting..."}
               </span>
             </div>
           </div>
         </header>
 
+        {/* Configuration Panel */}
+        <div className="mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-md">
+          <div className="flex items-center gap-2 text-gray-300">
+             <Settings className="w-5 h-5 text-gray-400" /> 
+             <span className="font-semibold">Dynamic Aggregator Node Target:</span>
+          </div>
+          <div className="flex items-center gap-3">
+             <input 
+               type="number" 
+               min="1"
+               max="100"
+               value={expectedNodesInput} 
+               onChange={(e) => setExpectedNodesInput(e.target.value)}
+               className="bg-black/40 border border-gray-600 rounded-lg px-4 py-2 w-24 text-center focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+             />
+             <button 
+               onClick={updateConfig}
+               className="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+             >
+               Apply Config
+             </button>
+          </div>
+        </div>
+
         {/* Top KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {/* Round Card */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-blue-500/50 transition-colors duration-300 md:col-span-2">
             <div className="flex justify-between items-start mb-4">
               <p className="text-gray-400 font-medium flex items-center gap-2">
@@ -89,8 +135,6 @@ export default function Home() {
               </p>
             </div>
             <h3 className="text-5xl font-black text-white">{currentRound}</h3>
-            
-            {/* Round Progress Bar */}
             <div className="mt-6">
               <div className="flex justify-between text-xs text-gray-500 mb-2 font-medium">
                 <span>Progress to Convergence Goal</span>
@@ -100,14 +144,11 @@ export default function Home() {
                 <div 
                   className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2.5 rounded-full transition-all duration-1000 ease-out relative"
                   style={{ width: `${progressPercentage}%` }}
-                >
-                  <div className="absolute top-0 right-0 bottom-0 w-10 bg-gradient-to-r from-transparent to-white/30" />
-                </div>
+                />
               </div>
             </div>
           </div>
 
-          {/* Accuracy Card */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden hover:border-green-500/50 transition-colors duration-300">
              <div className="flex justify-between items-start mb-4">
               <p className="text-gray-400 font-medium flex items-center gap-2">
@@ -120,7 +161,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Current Loss Card */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden hover:border-emerald-500/50 transition-colors duration-300">
              <div className="flex justify-between items-start mb-4">
               <p className="text-gray-400 font-medium flex items-center gap-2">
@@ -129,7 +169,7 @@ export default function Home() {
             </div>
             <h3 className="text-4xl font-black text-white overflow-hidden text-ellipsis">{latestLoss}</h3>
             <p className="mt-4 text-sm text-emerald-400 flex items-center gap-1">
-              <Server className="w-4 h-4" /> {status?.totalNodes || 0} Nodes Synced
+              <Server className="w-4 h-4" /> Wait-State: <span className="font-bold ml-1 text-white">{status?.totalNodes || 0} / {status?.expectedNodes || '?'}</span>
             </p>
           </div>
         </div>
@@ -148,7 +188,6 @@ export default function Home() {
                 <LineChart data={history} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
                   
-                  {/* Primary Y-Axis for Loss */}
                   <YAxis 
                     yAxisId="left"
                     stroke="#4b5563" 
@@ -158,7 +197,6 @@ export default function Home() {
                     tickFormatter={(value) => value.toFixed(3)}
                     dx={-10}
                   />
-                  {/* Secondary Y-Axis for Accuracy */}
                   <YAxis 
                     yAxisId="right"
                     orientation="right"
@@ -188,7 +226,6 @@ export default function Home() {
                     ]}
                   />
 
-                  {/* Loss Line */}
                   <Line 
                     yAxisId="left"
                     name="Loss"
@@ -202,7 +239,6 @@ export default function Home() {
                     animationDuration={1500}
                   />
                   
-                  {/* Accuracy Line */}
                   <Line 
                     yAxisId="right"
                     name="Accuracy"
@@ -222,7 +258,6 @@ export default function Home() {
                 <div className="text-center">
                   <Activity className="w-12 h-12 text-gray-500 mx-auto mb-4 animate-pulse" />
                   <p className="text-gray-400 font-medium">Awaiting training cycles to generate full spectrum graph...</p>
-                  <p className="text-sm text-gray-600 mt-2">The chart will automatically visualize Loss and Accuracy simultaneously.</p>
                 </div>
               </div>
             )}

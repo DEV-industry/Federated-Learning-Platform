@@ -4,7 +4,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +18,7 @@ import java.time.LocalDateTime;
 @SpringBootApplication
 @RestController
 @RequestMapping("/api")
-@CrossOrigin(origins = "*") // Allow frontend to fetch status
+@CrossOrigin(origins = "*") 
 public class AggregatorApplication {
 
     @Autowired
@@ -25,11 +29,10 @@ public class AggregatorApplication {
     
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
-    private final int EXPECTED_NODES = 2;
+    private int expectedNodes = 2;
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        // Resume round counting if the database has historical persistence data
         long count = roundRepository.count();
         if (count > 0) {
             this.currentRound = (int) count;
@@ -49,12 +52,23 @@ public class AggregatorApplication {
             nodeLosses.put(payload.getNodeId(), payload.getLoss());
         }
         
-        // Check if all expected nodes have submitted their weights
-        if (nodeWeights.size() >= EXPECTED_NODES) {
+        if (nodeWeights.size() >= expectedNodes) {
             aggregateWeights();
         }
         
         return Map.of("status", "success", "message", "Weights received for " + payload.getNodeId());
+    }
+
+    @PostMapping("/config")
+    public synchronized Map<String, Object> updateConfig(@RequestBody Map<String, Integer> config) {
+        if (config.containsKey("expectedNodes")) {
+            this.expectedNodes = config.get("expectedNodes");
+            if (this.nodeWeights.size() >= this.expectedNodes) {
+                aggregateWeights();
+            }
+            return Map.of("status", "success", "message", "Expected nodes updated to " + this.expectedNodes);
+        }
+        return Map.of("status", "error", "message", "Invalid config payload");
     }
 
     private void aggregateWeights() {
@@ -66,7 +80,6 @@ public class AggregatorApplication {
         int numParams = allWeights.get(0).size();
         List<Double> newGlobalWeights = new ArrayList<>(numParams);
         
-        // Calculate the mathematical average for each weight parameter
         for (int i = 0; i < numParams; i++) {
             double sum = 0.0;
             for (List<Double> nodeWeight : allWeights) {
@@ -75,7 +88,6 @@ public class AggregatorApplication {
             newGlobalWeights.add(sum / allWeights.size());
         }
         
-        // Calculate average loss over expected nodes
         double avgLoss = 0.0;
         if (!nodeLosses.isEmpty()) {
             for (Double loss : nodeLosses.values()) {
@@ -84,21 +96,16 @@ public class AggregatorApplication {
             avgLoss /= nodeLosses.size();
         }
 
-        // --- Mocked Accuracy Evaluation ---
-        // Basic heuristic: As loss drops, accuracy grows starting from random chance (10%).
         double accuracy = Math.max(0.1, 1.0 - (avgLoss * 0.4));
-        if (accuracy > 0.99) accuracy = 0.99; // Cap the logic mock
+        if (accuracy > 0.99) accuracy = 0.99; 
 
         this.currentRound++;
         
-        // --- Postgres Persistence ---
         RoundEntity entity = new RoundEntity(currentRound, avgLoss, accuracy, LocalDateTime.now());
         roundRepository.save(entity);
 
-        // Update global state
         this.globalWeights = newGlobalWeights;
         
-        // Clear nodes' submissions for the next round
         this.nodeWeights.clear();
         this.nodeLosses.clear();
         
@@ -107,13 +114,13 @@ public class AggregatorApplication {
 
     @DeleteMapping("/training/reset")
     public synchronized Map<String, Object> resetTraining() {
-        roundRepository.deleteAll(); // Wipe postgres database
+        roundRepository.deleteAll(); 
         this.currentRound = 0;
         this.globalWeights.clear();
         this.nodeWeights.clear();
         this.nodeLosses.clear();
         System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
-        return Map.of("status", "success", "message", "Database and server state cleared. Training reset to round 0.");
+        return Map.of("status", "success", "message", "Training reset to round 0.");
     }
 
     @GetMapping("/status")
@@ -121,6 +128,7 @@ public class AggregatorApplication {
         return Map.of(
             "connectedNodes", nodeWeights.keySet(),
             "totalNodes", nodeWeights.size(),
+            "expectedNodes", expectedNodes,
             "currentRound", currentRound
         );
     }
@@ -131,6 +139,27 @@ public class AggregatorApplication {
             "currentRound", currentRound,
             "globalWeights", globalWeights
         );
+    }
+
+    @GetMapping("/model/download")
+    public ResponseEntity<byte[]> downloadModel() {
+        if (globalWeights == null || globalWeights.isEmpty()) {
+            return ResponseEntity.badRequest().body(new byte[0]);
+        }
+        
+        ByteBuffer buffer = ByteBuffer.allocate(globalWeights.size() * 8);
+        for (Double w : globalWeights) {
+            buffer.putDouble(w != null ? w : 0.0);
+        }
+        byte[] modelBytes = buffer.array();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDispositionFormData("attachment", "global_model_r" + currentRound + ".bin");
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(modelBytes);
     }
 
     @GetMapping("/history")

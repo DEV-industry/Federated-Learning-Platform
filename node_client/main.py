@@ -79,10 +79,22 @@ def train_and_send():
     dataloader = get_data_loader()
     criterion = nn.CrossEntropyLoss()
     
+    last_trained_round = -1
+
     while True:
         # 1. Fetch the latest global model
         current_round, global_weights = fetch_global_model()
         
+        if current_round < last_trained_round:
+            print(f"[{NODE_ID}] Aggregator reset detected! Wiping local learning memory.")
+            model = MNISTModel()
+            last_trained_round = -1
+            
+        if current_round <= last_trained_round and current_round != 0:
+            print(f"[{NODE_ID}] Round {current_round} already trained. Waiting for aggregator to advance to round {current_round + 1}...")
+            time.sleep(5)
+            continue
+
         # 2. Update local model with global weights if available
         if current_round > 0 and global_weights:
             try:
@@ -122,7 +134,8 @@ def train_and_send():
         except Exception as e:
             print(f"[{NODE_ID}] Failed to send weights: {e}")
             
-        # 5. Delay to observe the rounds progressing cleanly
+        # 5. Track state and delay to observe the rounds progressing cleanly
+        last_trained_round = current_round
         print("-" * 50)
         time.sleep(5)
 
