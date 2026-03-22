@@ -107,6 +107,9 @@ def train_and_send():
         else:
             print(f"[{NODE_ID}] Round 0: Using initial local random weights.")
 
+        # Capture starting weights to compute the update delta later
+        starting_weights = flatten_weights(model)
+
         # 3. Train on local MNIST subset for 1 epoch
         print(f"[{NODE_ID}] Starting local training (1 epoch)...")
         model.train()
@@ -127,20 +130,26 @@ def train_and_send():
         avg_loss = running_loss / len(dataloader)
         print(f"[{NODE_ID}] Finished epoch. Average Loss: {avg_loss:.4f}")
 
-        # 4. Flatten and apply DP (if enabled), then send updated weights back to aggregator, including average loss
+        # 4. Flatten, compute update delta, apply DP, then send updated weights back to aggregator
         trained_weights_list = flatten_weights(model)
         
         if DP_ENABLED:
-            weights_tensor = torch.tensor(trained_weights_list)
+            t_trained = torch.tensor(trained_weights_list)
+            t_start = torch.tensor(starting_weights)
+            update_tensor = t_trained - t_start
+            
             max_norm = 1.0
-            l2_norm = torch.norm(weights_tensor, p=2)
+            l2_norm = torch.norm(update_tensor, p=2)
             if l2_norm > max_norm:
-                weights_tensor = weights_tensor * (max_norm / l2_norm)
+                update_tensor = update_tensor * (max_norm / l2_norm)
                 
-            noise = torch.normal(mean=0.0, std=DP_NOISE_MULTIPLIER * max_norm, size=weights_tensor.size())
-            weights_tensor = weights_tensor + noise
-            trained_weights = weights_tensor.tolist()
-            print(f"[{NODE_ID}] Applied Local DP: clipped L2 norm={l2_norm:.4f}, noise std={DP_NOISE_MULTIPLIER * max_norm}")
+            noise = torch.normal(mean=0.0, std=DP_NOISE_MULTIPLIER * max_norm, size=update_tensor.size())
+            noisy_update = update_tensor + noise
+            
+            final_weights_tensor = t_start + noisy_update
+            trained_weights = final_weights_tensor.tolist()
+            
+            print(f"[{NODE_ID}] Applied Local DP: clipped update L2 norm={l2_norm:.4f}, noise std={DP_NOISE_MULTIPLIER * max_norm}")
         else:
             trained_weights = trained_weights_list
 
