@@ -1,8 +1,26 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: fluser
+      POSTGRES_PASSWORD: flpassword
+      POSTGRES_DB: fldb
+    ports:
+      - "5432:5432"
+    networks:
+      - fl-network
+
   aggregator:
     build: ./aggregator
     ports:
       - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/fldb
+      - SPRING_DATASOURCE_USERNAME=fluser
+      - SPRING_DATASOURCE_PASSWORD=flpassword
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      - postgres
     networks:
       - fl-network
 

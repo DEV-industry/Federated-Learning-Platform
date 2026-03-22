@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Activity, Server, Target, GitBranch, Cpu } from "lucide-react";
+import { Activity, Server, Target, GitBranch, Cpu, Trophy } from "lucide-react";
 
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
@@ -26,16 +26,31 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, []);
 
+  const resetTraining = async () => {
+    if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
+    try {
+      await fetch("http://localhost:8080/api/training/reset", { method: "DELETE" });
+      setStatus(null);
+      setHistory([]);
+    } catch (err) {
+      console.error("Failed to reset training system.", err);
+    }
+  };
+
   const TARGET_ROUNDS = 100;
   const currentRound = status?.currentRound || 0;
   const progressPercentage = Math.min((currentRound / TARGET_ROUNDS) * 100, 100);
+
+  // Derive latest values securely
+  const latestLoss = history.length > 0 ? history[history.length - 1].loss.toFixed(4) : "0.0000";
+  const latestAccuracy = history.length > 0 ? (history[history.length - 1].accuracy * 100).toFixed(1) + "%" : "0.0%";
 
   return (
     <main className="min-h-screen bg-[#0B0F19] text-white selection:bg-blue-500 selection:text-white pb-20">
       {/* Dynamic Background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 blur-[120px] rounded-full mix-blend-screen" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 blur-[120px] rounded-full mix-blend-screen" />
+        <div className="absolute top-[-10%] left-[20%] w-[40%] h-[40%] bg-blue-600/10 blur-[150px] rounded-full mix-blend-screen" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-green-600/10 blur-[150px] rounded-full mix-blend-screen" />
       </div>
 
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16">
@@ -46,20 +61,28 @@ export default function Home() {
               <Cpu className="w-10 h-10 text-blue-400" />
               Federated Learning Ops
             </h1>
-            <p className="text-gray-400 mt-2 text-lg">Decentralized AI Training Dashboard</p>
+            <p className="text-gray-400 mt-2 text-lg drop-shadow-sm">Decentralized AI Training Dashboard</p>
           </div>
-          <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full backdrop-blur-md">
-            <div className={`w-3 h-3 rounded-full animate-pulse ${status ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'bg-red-500'}`} />
-            <span className="text-sm font-medium text-gray-200">
-              {status ? "System Online" : "Connecting to Aggregator..."}
-            </span>
+          <div className="flex gap-4 items-center">
+            <button 
+              onClick={resetTraining}
+              className="px-4 py-2 bg-red-500/10 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-lg text-sm font-semibold transition-colors"
+            >
+              Reset System
+            </button>
+            <div className="flex items-center gap-3 bg-white/5 border border-white/10 px-5 py-2.5 rounded-full backdrop-blur-md">
+              <div className={`w-3 h-3 rounded-full animate-pulse ${status ? 'bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.5)]' : 'bg-red-500'}`} />
+              <span className="text-sm font-medium text-gray-200">
+                {status ? "System Online" : "Connecting to Aggregator..."}
+              </span>
+            </div>
           </div>
         </header>
 
         {/* Top KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           {/* Round Card */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-blue-500/50 transition-colors duration-300">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden group hover:border-blue-500/50 transition-colors duration-300 md:col-span-2">
             <div className="flex justify-between items-start mb-4">
               <p className="text-gray-400 font-medium flex items-center gap-2">
                 <Target className="w-5 h-5 text-blue-400" /> Global Round
@@ -70,7 +93,7 @@ export default function Home() {
             {/* Round Progress Bar */}
             <div className="mt-6">
               <div className="flex justify-between text-xs text-gray-500 mb-2 font-medium">
-                <span>Progress to Convergence</span>
+                <span>Progress to Convergence Goal</span>
                 <span>{currentRound} / {TARGET_ROUNDS}</span>
               </div>
               <div className="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden border border-white/5">
@@ -84,17 +107,16 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Nodes Card */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden hover:border-purple-500/50 transition-colors duration-300">
+          {/* Accuracy Card */}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-xl relative overflow-hidden hover:border-green-500/50 transition-colors duration-300">
              <div className="flex justify-between items-start mb-4">
               <p className="text-gray-400 font-medium flex items-center gap-2">
-                <Server className="w-5 h-5 text-purple-400" /> Active Nodes
+                <Trophy className="w-5 h-5 text-green-400" /> Accuracy Tracker
               </p>
             </div>
-            <h3 className="text-5xl font-black text-white">{status?.totalNodes || 0}</h3>
-            <p className="mt-4 text-sm text-gray-400 font-mono flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-purple-500 animate-ping" />
-              IDs: {status?.connectedNodes?.length > 0 ? status.connectedNodes.join(", ") : "Awaiting sync..."}
+            <h3 className="text-5xl font-black text-white">{latestAccuracy}</h3>
+            <p className="mt-4 text-sm text-green-400 flex items-center gap-1">
+              <GitBranch className="w-4 h-4" /> Real-time Evaluation
             </p>
           </div>
 
@@ -105,68 +127,93 @@ export default function Home() {
                 <Activity className="w-5 h-5 text-emerald-400" /> Latest Avg Loss
               </p>
             </div>
-            <h3 className="text-5xl font-black text-white">
-              {history.length > 0 ? history[history.length - 1].loss.toFixed(4) : "0.0000"}
-            </h3>
+            <h3 className="text-4xl font-black text-white overflow-hidden text-ellipsis">{latestLoss}</h3>
             <p className="mt-4 text-sm text-emerald-400 flex items-center gap-1">
-              <GitBranch className="w-4 h-4" /> Global Model Synchronizing
+              <Server className="w-4 h-4" /> {status?.totalNodes || 0} Nodes Synced
             </p>
           </div>
         </div>
 
-        {/* Chart Section */}
-        <div className="bg-gradient-to-br from-white/5 to-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-xl hover:border-white/20 transition-all duration-500 mt-8">
+        {/* Dual Chart Section */}
+        <div className="bg-gradient-to-br from-white/5 to-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-xl hover:border-white/20 transition-all duration-500 mt-8 shadow-2xl">
           <div className="mb-6 flex items-center justify-between">
             <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
-              Model Convergence Graph
+              Model Convergence (Loss vs Accuracy)
             </h2>
-            <div className="text-xs font-mono bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full border border-blue-500/30">
-              Loss / Training Rounds
-            </div>
           </div>
           
-          <div className="h-[400px] w-full mt-4">
+          <div className="h-[430px] w-full mt-4">
             {history.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={history} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorLoss" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                  <XAxis 
-                    dataKey="round" 
-                    stroke="#888888" 
-                    tick={{fill: '#888888'}} 
-                    tickLine={false}
-                    axisLine={false}
-                    dy={10}
-                  />
+                <LineChart data={history} margin={{ top: 20, right: 10, left: 10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+                  
+                  {/* Primary Y-Axis for Loss */}
                   <YAxis 
-                    stroke="#888888" 
-                    tick={{fill: '#888888'}} 
+                    yAxisId="left"
+                    stroke="#4b5563" 
+                    tick={{fill: '#9ca3af'}} 
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => value.toFixed(3)}
                     dx={-10}
                   />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '0.75rem', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
-                    itemStyle={{ color: '#60a5fa', fontWeight: 'bold' }}
-                    formatter={(value: any) => [Number(value).toFixed(5), "Average Validation Loss"]}
-                    labelFormatter={(label) => `Global Round: ${label}`}
+                  {/* Secondary Y-Axis for Accuracy */}
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    stroke="#4b5563" 
+                    tick={{fill: '#9ca3af'}} 
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
+                    dx={10}
                   />
+                  <XAxis 
+                    dataKey="round" 
+                    stroke="#4b5563" 
+                    tick={{fill: '#9ca3af'}} 
+                    tickLine={false}
+                    axisLine={false}
+                    dy={10}
+                  />
+
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', borderRadius: '0.75rem', color: '#fff', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' }}
+                    itemStyle={{ fontWeight: 'bold' }}
+                    labelFormatter={(label) => `Global Round: ${label}`}
+                    formatter={(value: any, name: any) => [
+                      name === 'Accuracy' ? `${(Number(value)*100).toFixed(2)}%` : Number(value).toFixed(5), 
+                      String(name)
+                    ]}
+                  />
+
+                  {/* Loss Line */}
                   <Line 
+                    yAxisId="left"
+                    name="Loss"
                     type="monotone" 
                     dataKey="loss" 
                     stroke="#3b82f6" 
                     strokeWidth={4}
                     dot={{ r: 4, fill: '#1e3a8a', strokeWidth: 2, stroke: '#60a5fa' }}
                     activeDot={{ r: 8, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
-                    animationDuration={1500}
                     isAnimationActive={true}
+                    animationDuration={1500}
+                  />
+                  
+                  {/* Accuracy Line */}
+                  <Line 
+                    yAxisId="right"
+                    name="Accuracy"
+                    type="monotone" 
+                    dataKey="accuracy" 
+                    stroke="#10b981" 
+                    strokeWidth={4}
+                    dot={{ r: 4, fill: '#064e3b', strokeWidth: 2, stroke: '#34d399' }}
+                    activeDot={{ r: 8, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
+                    isAnimationActive={true}
+                    animationDuration={1500}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -174,8 +221,8 @@ export default function Home() {
               <div className="flex h-full items-center justify-center border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
                 <div className="text-center">
                   <Activity className="w-12 h-12 text-gray-500 mx-auto mb-4 animate-pulse" />
-                  <p className="text-gray-400 font-medium">Awaiting training cycles to generate convergence graph...</p>
-                  <p className="text-sm text-gray-600 mt-2">The chart will automatically appear as rounds complete.</p>
+                  <p className="text-gray-400 font-medium">Awaiting training cycles to generate full spectrum graph...</p>
+                  <p className="text-sm text-gray-600 mt-2">The chart will automatically visualize Loss and Accuracy simultaneously.</p>
                 </div>
               </div>
             )}

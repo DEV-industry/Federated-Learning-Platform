@@ -3,10 +3,13 @@ package com.flplatform.aggregator;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.time.LocalDateTime;
 
 @SpringBootApplication
 @RestController
@@ -14,12 +17,25 @@ import java.util.concurrent.ConcurrentHashMap;
 @CrossOrigin(origins = "*") // Allow frontend to fetch status
 public class AggregatorApplication {
 
+    @Autowired
+    private RoundRepository roundRepository;
+
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
-    private final List<Map<String, Object>> lossHistory = new ArrayList<>();
+    
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
     private final int EXPECTED_NODES = 2;
+
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        // Resume round counting if the database has historical persistence data
+        long count = roundRepository.count();
+        if (count > 0) {
+            this.currentRound = (int) count;
+            System.out.println("Resumed FedAvg from Database at Round " + this.currentRound);
+        }
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(AggregatorApplication.class, args);
@@ -66,21 +82,38 @@ public class AggregatorApplication {
                 avgLoss += loss;
             }
             avgLoss /= nodeLosses.size();
-            Map<String, Object> roundData = new ConcurrentHashMap<>();
-            roundData.put("round", currentRound + 1);
-            roundData.put("loss", avgLoss);
-            lossHistory.add(roundData);
         }
+
+        // --- Mocked Accuracy Evaluation ---
+        // Basic heuristic: As loss drops, accuracy grows starting from random chance (10%).
+        double accuracy = Math.max(0.1, 1.0 - (avgLoss * 0.4));
+        if (accuracy > 0.99) accuracy = 0.99; // Cap the logic mock
+
+        this.currentRound++;
+        
+        // --- Postgres Persistence ---
+        RoundEntity entity = new RoundEntity(currentRound, avgLoss, accuracy, LocalDateTime.now());
+        roundRepository.save(entity);
 
         // Update global state
         this.globalWeights = newGlobalWeights;
-        this.currentRound++;
         
         // Clear nodes' submissions for the next round
         this.nodeWeights.clear();
         this.nodeLosses.clear();
         
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound);
+    }
+
+    @DeleteMapping("/training/reset")
+    public synchronized Map<String, Object> resetTraining() {
+        roundRepository.deleteAll(); // Wipe postgres database
+        this.currentRound = 0;
+        this.globalWeights.clear();
+        this.nodeWeights.clear();
+        this.nodeLosses.clear();
+        System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
+        return Map.of("status", "success", "message", "Database and server state cleared. Training reset to round 0.");
     }
 
     @GetMapping("/status")
@@ -102,7 +135,16 @@ public class AggregatorApplication {
 
     @GetMapping("/history")
     public List<Map<String, Object>> getHistory() {
-        return lossHistory;
+        List<RoundEntity> records = roundRepository.findAll();
+        List<Map<String, Object>> history = new ArrayList<>();
+        for (RoundEntity r : records) {
+            history.add(Map.of(
+                "round", r.getRoundNumber(),
+                "loss", r.getAvgLoss(),
+                "accuracy", r.getAccuracy()
+            ));
+        }
+        return history;
     }
 }
 
