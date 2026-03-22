@@ -23,7 +23,10 @@ export default function Home() {
         
       fetch("http://localhost:8080/api/history")
         .then((res) => res.json())
-        .then((data) => setHistory(data))
+        .then((data) => {
+           const sortedData = data.sort((a: any, b: any) => a.round - b.round);
+           setHistory(sortedData);
+        })
         .catch((err) => console.error(err));
     };
 
