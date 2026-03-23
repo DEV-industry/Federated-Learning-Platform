@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Target, TrendingUp, TrendingDown } from "lucide-react";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
@@ -38,9 +40,31 @@ export default function Home() {
     };
 
     fetchStatus();
-    const intervalId = setInterval(fetchStatus, 2000);
+    
+    const client = new Client({
+      webSocketFactory: () => new SockJS("http://localhost:8080/ws-sockjs"),
+      onConnect: () => {
+        console.log("Connected to STOMP via SockJS");
+        client.subscribe("/topic/updates", (message) => {
+          if (message.body) {
+            const data = JSON.parse(message.body);
+            setStatus(data.status);
+            const sortedHistory = data.history.sort((a: any, b: any) => a.round - b.round);
+            setHistory(sortedHistory);
+          }
+        });
+      },
+      onStompError: (frame) => {
+        console.error("Broker connection error: " + frame.headers["message"]);
+      },
+      debug: (msg) => console.log(msg),
+    });
 
-    return () => clearInterval(intervalId);
+    client.activate();
+
+    return () => {
+      client.deactivate();
+    };
   }, [expectedNodesInput, safetyThresholdInput]);
 
   const resetTraining = async () => {

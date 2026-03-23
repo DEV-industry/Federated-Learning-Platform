@@ -9,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -25,6 +26,9 @@ public class AggregatorApplication {
 
     @Autowired
     private RoundRepository roundRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @Value("${fl.security.threshold:5.0}")
     private double safetyThreshold;
@@ -55,6 +59,19 @@ public class AggregatorApplication {
         SpringApplication.run(AggregatorApplication.class, args);
     }
 
+    private void broadcastUpdate() {
+        if (messagingTemplate != null) {
+            try {
+                messagingTemplate.convertAndSend("/topic/updates", Map.of(
+                    "status", getStatus(),
+                    "history", getHistory()
+                ));
+            } catch (Exception e) {
+                System.err.println("Failed to broadcast update: " + e.getMessage());
+            }
+        }
+    }
+
     @PostMapping("/weights")
     public synchronized ResponseEntity<Map<String, Object>> receiveWeights(@RequestHeader(value = "X-API-Key", required = false) String requestApiKey, @RequestBody WeightPayload payload) {
         if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
@@ -77,6 +94,7 @@ public class AggregatorApplication {
             aggregateWeights();
         }
         
+        broadcastUpdate();
         return ResponseEntity.ok(Map.of("status", "success", "message", "Weights received for " + payload.getNodeId()));
     }
 
@@ -101,6 +119,7 @@ public class AggregatorApplication {
             if (this.nodeWeights.size() >= this.expectedNodes) {
                 aggregateWeights();
             }
+            broadcastUpdate();
             return Map.of("status", "success", "message", message.toString().trim());
         }
         
@@ -199,6 +218,7 @@ public class AggregatorApplication {
         this.nodeRejectionCount.clear();
         this.nodeDpStatus.clear();
         System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
+        broadcastUpdate();
         return Map.of("status", "success", "message", "Training reset to round 0.");
     }
 
