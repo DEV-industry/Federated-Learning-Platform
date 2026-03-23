@@ -69,9 +69,9 @@ def get_data_loader():
     
     # Split dataset based on NODE_ID
     if "1" in NODE_ID:
-        indices = [i for i, target in enumerate(dataset.targets) if target in range(0, 5)]
+        indices = [i for i, target in enumerate(dataset.targets) if int(target.item()) in range(0, 5)]
     else:
-        indices = [i for i, target in enumerate(dataset.targets) if target in range(5, 10)]
+        indices = [i for i, target in enumerate(dataset.targets) if int(target.item()) in range(5, 10)]
         
     subset = Subset(dataset, indices)
     return DataLoader(subset, batch_size=64, shuffle=True)
