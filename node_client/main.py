@@ -16,6 +16,7 @@ GLOBAL_MODEL_URL = AGGREGATOR_URL.replace("/weights", "/global-model")
 NODE_ID = os.getenv("NODE_ID", "node-1")
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
+API_KEY = os.getenv("API_KEY")
 
 class MNISTModel(nn.Module):
     def __init__(self):
@@ -49,8 +50,11 @@ def unflatten_weights(model, flat_list):
 def fetch_global_model():
     """Fetches the latest global model weights from the Aggregator."""
     try:
-        response = requests.get(GLOBAL_MODEL_URL, timeout=5)
-        if response.status_code == 200:
+        response = requests.get(GLOBAL_MODEL_URL, headers={"X-API-Key": API_KEY}, timeout=5)
+        if response.status_code == 401:
+            print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for global model fetch.")
+            return 0, []
+        elif response.status_code == 200:
             data = response.json()
             return data.get("currentRound", 0), data.get("globalWeights", [])
     except Exception as e:
@@ -155,13 +159,16 @@ def train_and_send():
 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_URL, json={
+            response = requests.post(AGGREGATOR_URL, headers={"X-API-Key": API_KEY}, json={
                 "nodeId": NODE_ID, 
                 "weights": trained_weights, 
                 "loss": avg_loss,
                 "dpEnabled": DP_ENABLED
             })
-            print(f"[{NODE_ID}] Aggregator response: {response.json()}")
+            if response.status_code == 401:
+                print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for sending weights.")
+            else:
+                print(f"[{NODE_ID}] Aggregator response: {response.json()}")
         except Exception as e:
             print(f"[{NODE_ID}] Failed to send weights: {e}")
             

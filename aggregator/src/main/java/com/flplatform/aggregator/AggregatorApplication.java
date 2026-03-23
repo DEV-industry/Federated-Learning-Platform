@@ -29,6 +29,9 @@ public class AggregatorApplication {
     @Value("${fl.security.threshold:5.0}")
     private double safetyThreshold;
 
+    @Value("${API_KEY}")
+    private String apiKey;
+
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
     private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
@@ -53,7 +56,12 @@ public class AggregatorApplication {
     }
 
     @PostMapping("/weights")
-    public synchronized Map<String, Object> receiveWeights(@RequestBody WeightPayload payload) {
+    public synchronized ResponseEntity<Map<String, Object>> receiveWeights(@RequestHeader(value = "X-API-Key", required = false) String requestApiKey, @RequestBody WeightPayload payload) {
+        if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
+            System.out.println("Unauthorized access attempt to /weights from " + payload.getNodeId());
+            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "Unauthorized"));
+        }
+        
         System.out.println("Received weights from " + payload.getNodeId());
         nodeWeights.put(payload.getNodeId(), payload.getWeights());
         if (payload.getLoss() != null) {
@@ -69,7 +77,7 @@ public class AggregatorApplication {
             aggregateWeights();
         }
         
-        return Map.of("status", "success", "message", "Weights received for " + payload.getNodeId());
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Weights received for " + payload.getNodeId()));
     }
 
     @PostMapping("/config")
@@ -229,11 +237,16 @@ public class AggregatorApplication {
     }
 
     @GetMapping("/global-model")
-    public Map<String, Object> getGlobalModel() {
-        return Map.of(
+    public ResponseEntity<Map<String, Object>> getGlobalModel(@RequestHeader(value = "X-API-Key", required = false) String requestApiKey) {
+        if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
+            System.out.println("Unauthorized access attempt to /global-model");
+            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "Unauthorized"));
+        }
+        
+        return ResponseEntity.ok(Map.of(
             "currentRound", currentRound,
             "globalWeights", globalWeights
-        );
+        ));
     }
 
     @GetMapping("/model/download")
