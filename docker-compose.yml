@@ -41,6 +41,7 @@ services:
       - NODE_ID=node-1
       - DP_ENABLED=true
       - DP_NOISE_MULTIPLIER=0.01
+      - FEDPROX_MU=${FEDPROX_MU}
       - API_KEY=${API_KEY}
     depends_on:
       - aggregator
@@ -54,6 +55,7 @@ services:
       - NODE_ID=node-2
       - DP_ENABLED=true
       - DP_NOISE_MULTIPLIER=0.01
+      - FEDPROX_MU=${FEDPROX_MU}
       - API_KEY=${API_KEY}
     depends_on:
       - aggregator

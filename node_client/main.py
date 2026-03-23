@@ -16,6 +16,7 @@ GLOBAL_MODEL_URL = AGGREGATOR_URL.replace("/weights", "/global-model")
 NODE_ID = os.getenv("NODE_ID", "node-1")
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
+FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
 API_KEY = os.getenv("API_KEY")
 
 class MNISTModel(nn.Module):
@@ -67,13 +68,10 @@ def get_data_loader():
     dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
     
     # Split dataset based on NODE_ID
-    total_len = len(dataset)
-    half_len = total_len // 2
-    
     if "1" in NODE_ID:
-        indices = list(range(0, half_len))
+        indices = [i for i, target in enumerate(dataset.targets) if target in range(0, 5)]
     else:
-        indices = list(range(half_len, total_len))
+        indices = [i for i, target in enumerate(dataset.targets) if target in range(5, 10)]
         
     subset = Subset(dataset, indices)
     return DataLoader(subset, batch_size=64, shuffle=True)
@@ -113,6 +111,7 @@ def train_and_send():
 
         # Capture starting weights to compute the update delta later
         starting_weights = flatten_weights(model)
+        global_weights_copy = [param.clone().detach() for param in model.parameters()]
 
         # 3. Train on local MNIST subset for 1 epoch
         print(f"[{NODE_ID}] Starting local training (1 epoch)...")
@@ -124,6 +123,13 @@ def train_and_send():
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
+            
+            # Proximal term for FedProx
+            proximal_term = 0.0
+            for param, global_param in zip(model.parameters(), global_weights_copy):
+                proximal_term += ((param - global_param) ** 2).sum()
+            loss += (FEDPROX_MU / 2.0) * proximal_term
+
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
