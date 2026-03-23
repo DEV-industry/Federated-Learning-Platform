@@ -62,6 +62,24 @@ def fetch_global_model():
         print(f"[{NODE_ID}] Error fetching global model: {e}")
     return 0, []
 
+def evaluate_global_model(model):
+    """Evaluates the global model on the full MNIST test set to determine true global accuracy."""
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+    test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
+    test_loader = DataLoader(test_dataset, batch_size=1000, shuffle=False)
+    
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            outputs = model(data)
+            _, predicted = torch.max(outputs.data, 1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+            
+    return correct / total
+
 def get_data_loader():
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     # Download locally within the container
@@ -108,6 +126,10 @@ def train_and_send():
                 print(f"[{NODE_ID}] Failed to load global weights: {e}")
         else:
             print(f"[{NODE_ID}] Round 0: Using initial local random weights.")
+
+        # Evaluate true global accuracy BEFORE local training
+        true_accuracy = evaluate_global_model(model)
+        print(f"[{NODE_ID}] True Global Accuracy on full test set: {true_accuracy * 100:.2f}%")
 
         # Capture starting weights to compute the update delta later
         starting_weights = flatten_weights(model)
@@ -169,7 +191,8 @@ def train_and_send():
                 "nodeId": NODE_ID, 
                 "weights": trained_weights, 
                 "loss": avg_loss,
-                "dpEnabled": DP_ENABLED
+                "dpEnabled": DP_ENABLED,
+                "accuracy": true_accuracy
             })
             if response.status_code == 401:
                 print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for sending weights.")

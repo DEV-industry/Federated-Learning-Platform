@@ -38,6 +38,7 @@ public class AggregatorApplication {
 
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
+    private final Map<String, Double> nodeAccuracies = new ConcurrentHashMap<>();
     private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
     private final Map<String, Integer> nodeRejectionCount = new ConcurrentHashMap<>();
     private final Map<String, Boolean> nodeDpStatus = new ConcurrentHashMap<>();
@@ -83,6 +84,9 @@ public class AggregatorApplication {
         nodeWeights.put(payload.getNodeId(), payload.getWeights());
         if (payload.getLoss() != null) {
             nodeLosses.put(payload.getNodeId(), payload.getLoss());
+        }
+        if (payload.getAccuracy() != null) {
+            nodeAccuracies.put(payload.getNodeId(), payload.getAccuracy());
         }
         if (payload.getDpEnabled() != null) {
             nodeDpStatus.put(payload.getNodeId(), payload.getDpEnabled());
@@ -169,6 +173,7 @@ public class AggregatorApplication {
             System.out.println("All nodes rejected in round " + (currentRound + 1) + ". Round skipped.");
             this.nodeWeights.clear();
             this.nodeLosses.clear();
+            this.nodeAccuracies.clear();
             return;
         }
 
@@ -191,8 +196,16 @@ public class AggregatorApplication {
             avgLoss /= nodeLosses.size();
         }
 
-        double accuracy = Math.max(0.1, 1.0 - (avgLoss * 0.4));
-        if (accuracy > 0.99) accuracy = 0.99; 
+        double accuracy = 0.0;
+        if (!nodeAccuracies.isEmpty()) {
+            for (Double acc : nodeAccuracies.values()) {
+                accuracy += acc;
+            }
+            accuracy /= nodeAccuracies.size();
+        } else {
+            accuracy = Math.max(0.1, 1.0 - (avgLoss * 0.4));
+            if (accuracy > 0.99) accuracy = 0.99; 
+        }
 
         this.currentRound++;
         
@@ -203,6 +216,7 @@ public class AggregatorApplication {
         
         this.nodeWeights.clear();
         this.nodeLosses.clear();
+        this.nodeAccuracies.clear();
         
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound);
     }
@@ -214,6 +228,7 @@ public class AggregatorApplication {
         this.globalWeights.clear();
         this.nodeWeights.clear();
         this.nodeLosses.clear();
+        this.nodeAccuracies.clear();
         this.nodeSecurityStatus.clear();
         this.nodeRejectionCount.clear();
         this.nodeDpStatus.clear();
@@ -310,6 +325,7 @@ class WeightPayload {
     private List<Double> weights;
     private Double loss;
     private Boolean dpEnabled;
+    private Double accuracy;
     
     public String getNodeId() { return nodeId; }
     public void setNodeId(String nodeId) { this.nodeId = nodeId; }
@@ -319,4 +335,6 @@ class WeightPayload {
     public void setLoss(Double loss) { this.loss = loss; }
     public Boolean getDpEnabled() { return dpEnabled; }
     public void setDpEnabled(Boolean dpEnabled) { this.dpEnabled = dpEnabled; }
+    public Double getAccuracy() { return accuracy; }
+    public void setAccuracy(Double accuracy) { this.accuracy = accuracy; }
 }
