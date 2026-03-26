@@ -68,7 +68,7 @@ export default function Home() {
   }, [expectedNodesInput, safetyThresholdInput]);
 
   const resetTraining = async () => {
-    if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
+    if (!confirm("Are you sure you wantt to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
     try {
       await fetch("http://localhost:8080/api/training/reset", { method: "DELETE" });
       setStatus(null);
