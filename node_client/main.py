@@ -1,6 +1,11 @@
 import time
 import requests
 import threading
+import signal
+import sys
+import uuid
+import socket
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,13 +16,49 @@ import os
 
 app = FastAPI()
 
-AGGREGATOR_URL = os.getenv("AGGREGATOR_URL", "http://aggregator:8080/api/weights")
-GLOBAL_MODEL_URL = AGGREGATOR_URL.replace("/weights", "/global-model")
-NODE_ID = os.getenv("NODE_ID", "node-1")
+# =========================================================================
+# CONFIGURATION — K8s-native with Docker-compatible defaults
+# =========================================================================
+
+AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "http://aggregator:8080")
+AGGREGATOR_WEIGHTS_URL = os.getenv("AGGREGATOR_URL", f"{AGGREGATOR_BASE_URL}/api/weights")
+GLOBAL_MODEL_URL = AGGREGATOR_WEIGHTS_URL.replace("/weights", "/global-model")
+REGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/register"
+HEARTBEAT_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/heartbeat"
+UNREGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/unregister"
+
+# Dynamic identity: auto-generate UUID if NODE_ID not explicitly set
+NODE_ID = os.getenv("NODE_ID", str(uuid.uuid4()))
+
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
 FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
 API_KEY = os.getenv("API_KEY")
+HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
+
+# =========================================================================
+# SHUTDOWN HANDLER — Graceful K8s pod termination
+# =========================================================================
+
+_shutdown_flag = threading.Event()
+
+def _graceful_shutdown(signum, frame):
+    """Handle SIGTERM/SIGINT for graceful K8s pod termination."""
+    print(f"[{NODE_ID}] Received shutdown signal ({signum}). Unregistering...")
+    _shutdown_flag.set()
+    try:
+        requests.post(UNREGISTER_URL, json={"nodeId": NODE_ID}, timeout=5)
+        print(f"[{NODE_ID}] Successfully unregistered from aggregator.")
+    except Exception as e:
+        print(f"[{NODE_ID}] Failed to unregister: {e}")
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _graceful_shutdown)
+signal.signal(signal.SIGINT, _graceful_shutdown)
+
+# =========================================================================
+# MODEL DEFINITION
+# =========================================================================
 
 class MNISTModel(nn.Module):
     def __init__(self):
@@ -48,10 +89,71 @@ def unflatten_weights(model, flat_list):
         param.data.copy_(param_data.view_as(param))
         current_index += num_elements
 
+# =========================================================================
+# REGISTRATION — Dynamic node registration with retry
+# =========================================================================
+
+def register_with_aggregator(max_retries=30, retry_delay=5):
+    """Register this node with the aggregator. Retries until successful."""
+    hostname = socket.gethostname()
+    print(f"[{NODE_ID}] Registering with aggregator at {REGISTER_URL}...")
+    
+    for attempt in range(max_retries):
+        if _shutdown_flag.is_set():
+            return False
+        try:
+            response = requests.post(REGISTER_URL, json={
+                "nodeId": NODE_ID,
+                "hostname": hostname
+            }, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"[{NODE_ID}] Registered successfully! "
+                      f"Current round: {data.get('currentRound', 0)}, "
+                      f"Active nodes: {data.get('activeNodes', '?')}, "
+                      f"Min quorum: {data.get('minQuorum', '?')}")
+                return True
+            else:
+                print(f"[{NODE_ID}] Registration failed (HTTP {response.status_code}): {response.text}")
+        except requests.exceptions.ConnectionError:
+            print(f"[{NODE_ID}] Aggregator not ready. Retry {attempt + 1}/{max_retries} in {retry_delay}s...")
+        except Exception as e:
+            print(f"[{NODE_ID}] Registration error: {e}")
+        
+        time.sleep(retry_delay)
+    
+    print(f"[{NODE_ID}] Failed to register after {max_retries} attempts. Exiting.")
+    return False
+
+# =========================================================================
+# HEARTBEAT — Background thread for K8s liveness
+# =========================================================================
+
+def heartbeat_loop():
+    """Send periodic heartbeats to the aggregator."""
+    while not _shutdown_flag.is_set():
+        try:
+            response = requests.post(HEARTBEAT_URL, json={"nodeId": NODE_ID}, timeout=5)
+            if response.status_code != 200:
+                print(f"[{NODE_ID}] Heartbeat failed (HTTP {response.status_code})")
+        except Exception as e:
+            print(f"[{NODE_ID}] Heartbeat error: {e}")
+        
+        # Sleep in small intervals to respond to shutdown quickly
+        for _ in range(HEARTBEAT_INTERVAL):
+            if _shutdown_flag.is_set():
+                return
+            time.sleep(1)
+
+# =========================================================================
+# NETWORK COMMUNICATION
+# =========================================================================
+
 def fetch_global_model():
     """Fetches the latest global model weights from the Aggregator."""
     try:
-        response = requests.get(GLOBAL_MODEL_URL, headers={"X-API-Key": API_KEY}, timeout=5)
+        response = requests.get(GLOBAL_MODEL_URL, headers={"X-API-Key": API_KEY}, timeout=15)
         if response.status_code == 401:
             print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for global model fetch.")
             return 0, []
@@ -80,22 +182,50 @@ def evaluate_global_model(model):
             
     return correct / total
 
+# =========================================================================
+# DATA LOADING — Hash-based dynamic partitioning (no more hardcoded splits)
+# =========================================================================
+
 def get_data_loader():
+    """Creates a data loader with a reproducible random partition based on NODE_ID hash.
+    
+    Unlike the old approach (splitting digits 0-4 vs 5-9 by node name),
+    this uses the NODE_ID as a seed to create a random subset of the
+    training data. Each node gets a unique, reproducible partition.
+    """
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
-    # Download locally within the container
     dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
     
-    # Split dataset based on NODE_ID
-    if "1" in NODE_ID:
-        indices = [i for i, target in enumerate(dataset.targets) if int(target.item()) in range(0, 5)]
-    else:
-        indices = [i for i, target in enumerate(dataset.targets) if int(target.item()) in range(5, 10)]
-        
+    # Use NODE_ID hash as seed for reproducible random partitioning
+    seed = hash(NODE_ID) % (2**32)
+    rng = random.Random(seed)
+    
+    # Each node gets a random ~50% subset (configurable via env var)
+    partition_fraction = float(os.getenv("DATA_PARTITION_FRACTION", "0.5"))
+    num_samples = int(len(dataset) * partition_fraction)
+    all_indices = list(range(len(dataset)))
+    indices = rng.sample(all_indices, k=num_samples)
+    
     subset = Subset(dataset, indices)
     return DataLoader(subset, batch_size=64, shuffle=True)
 
+# =========================================================================
+# TRAINING LOOP
+# =========================================================================
+
 def train_and_send():
     """Main training loop for the Federated Learning client."""
+    
+    # Step 1: Register with aggregator (blocks until successful)
+    if not register_with_aggregator():
+        print(f"[{NODE_ID}] Cannot proceed without registration. Shutting down.")
+        return
+    
+    # Step 2: Start heartbeat background thread
+    heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
+    heartbeat_thread.start()
+    
+    # Step 3: Initialize model and data
     print(f"[{NODE_ID}] Initializing model and downloading dataset...")
     model = MNISTModel()
     dataloader = get_data_loader()
@@ -103,7 +233,7 @@ def train_and_send():
     
     last_trained_round = -1
 
-    while True:
+    while not _shutdown_flag.is_set():
         # 1. Fetch the latest global model
         current_round, global_weights = fetch_global_model()
         
@@ -142,6 +272,9 @@ def train_and_send():
         running_loss = 0.0
         
         for batch_idx, (data, target) in enumerate(dataloader):
+            if _shutdown_flag.is_set():
+                return
+                
             optimizer.zero_grad()
             output = model(data)
             loss = criterion(output, target)
@@ -187,15 +320,18 @@ def train_and_send():
 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_URL, headers={"X-API-Key": API_KEY}, json={
+            response = requests.post(AGGREGATOR_WEIGHTS_URL, headers={"X-API-Key": API_KEY}, json={
                 "nodeId": NODE_ID, 
                 "weights": trained_weights, 
                 "loss": avg_loss,
                 "dpEnabled": DP_ENABLED,
                 "accuracy": true_accuracy
-            })
+            }, timeout=30)
             if response.status_code == 401:
                 print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for sending weights.")
+            elif response.status_code == 403:
+                print(f"[{NODE_ID}] Not registered! Attempting re-registration...")
+                register_with_aggregator(max_retries=5)
             else:
                 print(f"[{NODE_ID}] Aggregator response: {response.json()}")
         except Exception as e:
@@ -206,12 +342,23 @@ def train_and_send():
         print("-" * 50)
         time.sleep(5)
 
+# =========================================================================
+# FASTAPI LIFECYCLE
+# =========================================================================
+
 @app.on_event("startup")
 def startup_event():
     print(f"Starting Federated Learning Node: {NODE_ID}")
+    print(f"  Aggregator: {AGGREGATOR_BASE_URL}")
+    print(f"  DP Enabled: {DP_ENABLED}")
+    print(f"  FedProx μ: {FEDPROX_MU}")
     thread = threading.Thread(target=train_and_send, daemon=True)
     thread.start()
 
 @app.get("/")
 def read_root():
     return {"status": "Node running", "nodeId": NODE_ID}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "nodeId": NODE_ID, "shutdown": _shutdown_flag.is_set()}

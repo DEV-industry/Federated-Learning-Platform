@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-node-client
+  namespace: fl-platform
+  labels:
+    app: fl-node-client
+    app.kubernetes.io/part-of: federated-learning
+    app.kubernetes.io/component: node-client
+spec:
+  replicas: 5
+  # This is the KEY scalability lever. Scale with:
+  #   kubectl scale deployment fl-node-client -n fl-platform --replicas=1000
+  selector:
+    matchLabels:
+      app: fl-node-client
+  template:
+    metadata:
+      labels:
+        app: fl-node-client
+        app.kubernetes.io/part-of: federated-learning
+        app.kubernetes.io/component: node-client
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        # Spread nodes across different cluster machines to simulate distributed devices
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - fl-node-client
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        # Wait for the Aggregator to be ready before starting node clients
+        - name: wait-for-aggregator
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Aggregator at fl-aggregator:8080..."
+              until wget -q --spider http://fl-aggregator.fl-platform.svc.cluster.local:8080/api/status; do
+                echo "Aggregator not ready. Retrying in 5s..."
+                sleep 5
+              done
+              echo "Aggregator is ready!"
+      containers:
+        - name: node-client
+          image: your-registry/fl-node-client:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            # NODE_ID is intentionally NOT set here.
+            # The Python client auto-generates a UUID on startup.
+            # This enables dynamic scaling without identity conflicts.
+            - name: DP_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: DP_ENABLED
+            - name: DP_NOISE_MULTIPLIER
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: DP_NOISE_MULTIPLIER
+            - name: FEDPROX_MU
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: FEDPROX_MU
+            - name: DATA_PARTITION_FRACTION
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: DATA_PARTITION_FRACTION
+            - name: HEARTBEAT_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: HEARTBEAT_INTERVAL
+            - name: AGGREGATOR_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: AGGREGATOR_BASE_URL
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fl-secrets
+                  key: API_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"

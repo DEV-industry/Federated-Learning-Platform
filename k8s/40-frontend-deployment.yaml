@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-frontend
+  namespace: fl-platform
+  labels:
+    app: fl-frontend
+    app.kubernetes.io/part-of: federated-learning
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: fl-frontend
+  template:
+    metadata:
+      labels:
+        app: fl-frontend
+        app.kubernetes.io/part-of: federated-learning
+        app.kubernetes.io/component: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-registry/fl-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            # NEXT_PUBLIC_API_URL is baked at build time in the Dockerfile.
+            # For runtime override, rebuild the image with the new URL:
+            #   docker build --build-arg NEXT_PUBLIC_API_URL=http://your-ingress-url ./frontend
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: NEXT_PUBLIC_API_URL
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"

@@ -4,6 +4,8 @@ import { Target, TrendingUp, TrendingDown } from "lucide-react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import MetricCard from "./components/MetricCard";
@@ -21,7 +23,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchStatus = () => {
-      fetch("http://localhost:8080/api/status")
+      fetch(`${API_URL}/api/status`)
         .then((res) => res.json())
         .then((data) => {
           setStatus(data);
@@ -30,7 +32,7 @@ export default function Home() {
         })
         .catch((err) => console.error(err));
 
-      fetch("http://localhost:8080/api/history")
+      fetch(`${API_URL}/api/history`)
         .then((res) => res.json())
         .then((data) => {
           const sortedData = data.sort((a: any, b: any) => a.round - b.round);
@@ -42,7 +44,7 @@ export default function Home() {
     fetchStatus();
 
     const client = new Client({
-      webSocketFactory: () => new SockJS("http://localhost:8080/ws-sockjs"),
+      webSocketFactory: () => new SockJS(`${API_URL}/ws-sockjs`),
       onConnect: () => {
         console.log("Connected to STOMP via SockJS");
         client.subscribe("/topic/updates", (message) => {
@@ -70,7 +72,7 @@ export default function Home() {
   const resetTraining = async () => {
     if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
     try {
-      await fetch("http://localhost:8080/api/training/reset", { method: "DELETE" });
+      await fetch(`${API_URL}/api/training/reset`, { method: "DELETE" });
       setStatus(null);
       setHistory([]);
     } catch (err) {
@@ -80,7 +82,7 @@ export default function Home() {
 
   const updateConfig = async () => {
     try {
-      await fetch("http://localhost:8080/api/config", {
+      await fetch(`${API_URL}/api/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -118,7 +120,7 @@ export default function Home() {
       <Sidebar activeItem="Dashboard" />
 
       <main className="flex-1 ml-[250px] p-8 pb-20">
-        <Header onReset={resetTraining} downloadUrl="http://localhost:8080/api/model/download" />
+        <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
 
         {/* Online Status Pill */}
         <div className="flex items-center gap-6 mb-6">

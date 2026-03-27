@@ -36,6 +36,10 @@ node_client/.coverage
 # Docker
 .dockerise/
 
+# Kubernetes Secrets (do NOT commit credentials)
+k8s/*-secrets.yaml
+k8s/*secret*.yaml
+
 # Environment Variables
 .env
 

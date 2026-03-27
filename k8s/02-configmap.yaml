@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fl-config
+  namespace: fl-platform
+  labels:
+    app.kubernetes.io/part-of: federated-learning
+data:
+  # Aggregator configuration
+  AGGREGATOR_BASE_URL: "http://fl-aggregator.fl-platform.svc.cluster.local:8080"
+  FL_MIN_QUORUM: "3"
+  FL_QUORUM_TIMEOUT: "120"
+  FL_QUORUM_CHECK_INTERVAL: "10000"
+  FL_SECURITY_THRESHOLD: "5.0"
+  FL_HEARTBEAT_STALE: "60"
+  FL_HEARTBEAT_CHECK_INTERVAL: "15000"
+
+  # Node client configuration
+  DP_ENABLED: "true"
+  DP_NOISE_MULTIPLIER: "0.01"
+  FEDPROX_MU: "0.01"
+  DATA_PARTITION_FRACTION: "0.5"
+  HEARTBEAT_INTERVAL: "20"
+
+  # Frontend configuration
+  NEXT_PUBLIC_API_URL: "http://fl.local"
