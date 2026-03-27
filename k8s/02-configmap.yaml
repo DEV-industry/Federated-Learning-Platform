@@ -8,6 +8,8 @@ metadata:
 data:
   # Aggregator configuration
   AGGREGATOR_BASE_URL: "http://fl-aggregator.fl-platform.svc.cluster.local:8080"
+  SPRING_RABBITMQ_HOST: "rabbitmq"
+  SPRING_RABBITMQ_PORT: "5672"
   FL_MIN_QUORUM: "3"
   FL_QUORUM_TIMEOUT: "120"
   FL_QUORUM_CHECK_INTERVAL: "10000"

@@ -45,6 +45,9 @@ public class AggregatorApplication {
     @Autowired(required = false)
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
+
     @Value("${fl.security.threshold:5.0}")
     private double safetyThreshold;
 
@@ -305,18 +308,39 @@ public class AggregatorApplication {
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         registeredNodeRepository.save(node);
 
-        System.out.println("Received weights from " + payload.getNodeId());
-        nodeWeights.put(payload.getNodeId(), payload.getWeights());
-        if (payload.getLoss() != null) {
-            nodeLosses.put(payload.getNodeId(), payload.getLoss());
+        System.out.println("Received weights from " + payload.getNodeId() + " (sending to MinIO and RabbitMQ queue)");
+
+        try {
+            byte[] data = this.serializeWeights(payload.getWeights());
+            long timestamp = System.currentTimeMillis();
+            String path = "client-models/round-" + currentRound + "/" + payload.getNodeId() + "-" + timestamp + ".bin";
+            minioService.uploadWeights(path, data);
+
+            ModelSubmissionMessage msg = new ModelSubmissionMessage(
+                    payload.getNodeId(), path, payload.getLoss(), payload.getAccuracy(), payload.getDpEnabled());
+            
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
+            
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Weights received for " + payload.getNodeId() + " and queued successfully."));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("status", "error", "message", "Internal server error queueing weights."));
         }
-        if (payload.getAccuracy() != null) {
-            nodeAccuracies.put(payload.getNodeId(), payload.getAccuracy());
+    }
+
+    public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled) {
+        System.out.println("Processing submitted weights from queue for node: " + nodeId);
+        nodeWeights.put(nodeId, weights);
+        if (loss != null) {
+            nodeLosses.put(nodeId, loss);
         }
-        if (payload.getDpEnabled() != null) {
-            nodeDpStatus.put(payload.getNodeId(), payload.getDpEnabled());
+        if (accuracy != null) {
+            nodeAccuracies.put(nodeId, accuracy);
+        }
+        if (dpEnabled != null) {
+            nodeDpStatus.put(nodeId, dpEnabled);
         } else {
-            nodeDpStatus.put(payload.getNodeId(), false);
+            nodeDpStatus.put(nodeId, false);
         }
 
         // Track first submission time for quorum timeout
@@ -334,7 +358,6 @@ public class AggregatorApplication {
         }
 
         broadcastUpdate();
-        return ResponseEntity.ok(Map.of("status", "success", "message", "Weights received for " + payload.getNodeId()));
     }
 
     @PostMapping("/config")
@@ -490,7 +513,7 @@ public class AggregatorApplication {
         }
     }
 
-    private byte[] serializeWeights(List<Double> weights) {
+    public byte[] serializeWeights(List<Double> weights) {
         ByteBuffer buffer = ByteBuffer.allocate(weights.size() * 8);
         for (Double w : weights) {
             buffer.putDouble(w != null ? w : 0.0);
@@ -498,7 +521,7 @@ public class AggregatorApplication {
         return buffer.array();
     }
 
-    private List<Double> deserializeWeights(byte[] blob) {
+    public List<Double> deserializeWeights(byte[] blob) {
         if (blob == null || blob.length == 0) return new ArrayList<>();
         ByteBuffer buffer = ByteBuffer.wrap(blob);
         List<Double> weights = new ArrayList<>(blob.length / 8);
