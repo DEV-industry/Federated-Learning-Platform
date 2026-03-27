@@ -113,7 +113,9 @@ export default function Home() {
   const lossDelta = Math.abs(currLoss - prevLoss).toFixed(4);
   const lossTrend = currLoss <= prevLoss ? "down" : "up";
 
-  const nodeDetails = status?.nodeDetails || [];
+  const nodeDetails = (status?.nodeDetails || []).filter(
+    (node: any) => !node.status?.includes("STALE") && !node.status?.includes("DISCONNECTED")
+  );
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex">
