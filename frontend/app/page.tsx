@@ -114,7 +114,7 @@ export default function Home() {
   const lossTrend = currLoss <= prevLoss ? "down" : "up";
 
   const nodeDetails = (status?.nodeDetails || []).filter(
-    (node: any) => !node.status?.includes("STALE") && !node.status?.includes("DISCONNECTED")
+    (node: any) => node.status === "ACTIVE"
   );
 
   return (
