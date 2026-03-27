@@ -15,8 +15,7 @@ public class GlobalModelStateEntity {
     @Column(nullable = false)
     private int currentRound;
 
-    @JdbcTypeCode(SqlTypes.VARBINARY)
-    @Column(columnDefinition = "BYTEA")
+    @JdbcTypeCode(SqlTypes.BINARY)
     private byte[] globalWeightsBlob;
 
     @Column(nullable = false)
