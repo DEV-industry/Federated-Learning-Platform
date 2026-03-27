@@ -39,6 +39,9 @@ public class AggregatorApplication {
     @Autowired
     private GlobalModelStateRepository globalModelStateRepository;
 
+    @Autowired
+    private MinioService minioService;
+
     @Autowired(required = false)
     private SimpMessagingTemplate messagingTemplate;
 
@@ -79,14 +82,21 @@ public class AggregatorApplication {
             System.out.println("Resumed FedAvg from Database at Round " + this.currentRound);
         }
 
-        // Restore global model weights from global_model_state table
+        // Restore global model weights from MinIO via path stored in DB
         Optional<GlobalModelStateEntity> latestState = globalModelStateRepository.findTopByOrderByCurrentRoundDesc();
         if (latestState.isPresent()) {
             GlobalModelStateEntity state = latestState.get();
-            this.globalWeights = deserializeWeights(state.getGlobalWeightsBlob());
             this.currentRound = state.getCurrentRound();
-            System.out.println("Restored global model state from DB: Round " + this.currentRound
-                    + " with " + this.globalWeights.size() + " parameters");
+            if (state.getModelPath() != null && !state.getModelPath().isBlank()) {
+                try {
+                    byte[] blob = minioService.downloadWeights(state.getModelPath());
+                    this.globalWeights = deserializeWeights(blob);
+                    System.out.println("Restored global model from MinIO: " + state.getModelPath()
+                            + " (Round " + this.currentRound + ", " + this.globalWeights.size() + " parameters)");
+                } catch (Exception e) {
+                    System.err.println("Failed to restore weights from MinIO: " + e.getMessage());
+                }
+            }
         }
     }
 
@@ -471,7 +481,9 @@ public class AggregatorApplication {
     private void persistGlobalModelState() {
         try {
             byte[] blob = serializeWeights(this.globalWeights);
-            GlobalModelStateEntity stateEntity = new GlobalModelStateEntity(this.currentRound, blob);
+            String objectName = "models/round-" + this.currentRound + ".bin";
+            minioService.uploadWeights(objectName, blob);
+            GlobalModelStateEntity stateEntity = new GlobalModelStateEntity(this.currentRound, objectName);
             globalModelStateRepository.save(stateEntity);
         } catch (Exception e) {
             System.err.println("Failed to persist global model state: " + e.getMessage());
@@ -505,6 +517,7 @@ public class AggregatorApplication {
     public synchronized Map<String, Object> resetTraining() {
         roundRepository.deleteAll();
         globalModelStateRepository.deleteAll();
+        minioService.deleteAllObjects();
         this.currentRound = 0;
         this.globalWeights.clear();
         this.nodeWeights.clear();
@@ -515,7 +528,7 @@ public class AggregatorApplication {
         this.nodeDpStatus.clear();
         this.firstSubmissionTime = null;
         // Note: registered nodes are NOT cleared — only training state
-        System.out.println("Emergency Reset Completed. Database cleared. State back to Round 0.");
+        System.out.println("Emergency Reset Completed. Database and MinIO cleared. State back to Round 0.");
         broadcastUpdate();
         return Map.of("status", "success", "message", "Training reset to round 0.");
     }

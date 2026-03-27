@@ -1,8 +1,6 @@
 package com.flplatform.aggregator;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,28 +13,28 @@ public class GlobalModelStateEntity {
     @Column(nullable = false)
     private int currentRound;
 
-    @JdbcTypeCode(SqlTypes.BINARY)
-    private byte[] globalWeightsBlob;
+    @Column(length = 512)
+    private String modelPath;
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
     public GlobalModelStateEntity() {}
 
-    public GlobalModelStateEntity(int currentRound, byte[] globalWeightsBlob) {
+    public GlobalModelStateEntity(int currentRound, String modelPath) {
         this.currentRound = currentRound;
-        this.globalWeightsBlob = globalWeightsBlob;
+        this.modelPath = modelPath;
         this.updatedAt = LocalDateTime.now();
     }
 
     // Getters
     public Long getId() { return id; }
     public int getCurrentRound() { return currentRound; }
-    public byte[] getGlobalWeightsBlob() { return globalWeightsBlob; }
+    public String getModelPath() { return modelPath; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 
     // Setters
     public void setCurrentRound(int currentRound) { this.currentRound = currentRound; }
-    public void setGlobalWeightsBlob(byte[] globalWeightsBlob) { this.globalWeightsBlob = globalWeightsBlob; }
+    public void setModelPath(String modelPath) { this.modelPath = modelPath; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

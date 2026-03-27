@@ -15,6 +15,10 @@ data:
   FL_HEARTBEAT_STALE: "60"
   FL_HEARTBEAT_CHECK_INTERVAL: "15000"
 
+  # MinIO Object Storage
+  MINIO_URL: "http://fl-minio.fl-platform.svc.cluster.local:9000"
+  MINIO_BUCKET: "fl-models"
+
   # Node client configuration
   DP_ENABLED: "true"
   DP_NOISE_MULTIPLIER: "0.01"
