@@ -90,11 +90,11 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: AGGREGATOR_BASE_URL
-            - name: API_KEY
+            - name: NODE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: fl-secrets
-                  key: API_KEY
+                  key: NODE_SECRET
           readinessProbe:
             httpGet:
               path: /health

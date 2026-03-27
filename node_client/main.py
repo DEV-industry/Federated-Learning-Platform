@@ -33,8 +33,39 @@ NODE_ID = os.getenv("NODE_ID", str(uuid.uuid4()))
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
 FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
-API_KEY = os.getenv("API_KEY")
+NODE_SECRET = os.getenv("NODE_SECRET", "def_node_secret")
+AUTH_URL = f"{AGGREGATOR_BASE_URL}/api/auth"
+JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
+
+def get_auth_headers():
+    if JWT_TOKEN:
+        return {"Authorization": f"Bearer {JWT_TOKEN}"}
+    return {}
+
+def authenticate(max_retries=30, retry_delay=5):
+    global JWT_TOKEN
+    print(f"[{NODE_ID}] Authenticating with aggregator at {AUTH_URL}...")
+    for attempt in range(max_retries):
+        if _shutdown_flag.is_set():
+            return False
+        try:
+            response = requests.post(AUTH_URL, json={
+                "nodeId": NODE_ID,
+                "nodeSecret": NODE_SECRET
+            }, timeout=10)
+            if response.status_code == 200:
+                JWT_TOKEN = response.json().get("token")
+                print(f"[{NODE_ID}] Authenticated successfully.")
+                return True
+            else:
+                print(f"[{NODE_ID}] Auth failed (HTTP {response.status_code}): {response.text}")
+        except requests.exceptions.ConnectionError:
+            print(f"[{NODE_ID}] Aggregator not ready. Retry {attempt + 1}/{max_retries}...")
+        except Exception as e:
+            print(f"[{NODE_ID}] Auth error: {e}")
+        time.sleep(retry_delay)
+    return False
 
 # =========================================================================
 # SHUTDOWN HANDLER — Graceful K8s pod termination
@@ -47,7 +78,7 @@ def _graceful_shutdown(signum, frame):
     print(f"[{NODE_ID}] Received shutdown signal ({signum}). Unregistering...")
     _shutdown_flag.set()
     try:
-        requests.post(UNREGISTER_URL, json={"nodeId": NODE_ID}, timeout=5)
+        requests.post(UNREGISTER_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5)
         print(f"[{NODE_ID}] Successfully unregistered from aggregator.")
     except Exception as e:
         print(f"[{NODE_ID}] Failed to unregister: {e}")
@@ -102,7 +133,7 @@ def register_with_aggregator(max_retries=30, retry_delay=5):
         if _shutdown_flag.is_set():
             return False
         try:
-            response = requests.post(REGISTER_URL, json={
+            response = requests.post(REGISTER_URL, headers=get_auth_headers(), json={
                 "nodeId": NODE_ID,
                 "hostname": hostname
             }, timeout=10)
@@ -134,7 +165,7 @@ def heartbeat_loop():
     """Send periodic heartbeats to the aggregator."""
     while not _shutdown_flag.is_set():
         try:
-            response = requests.post(HEARTBEAT_URL, json={"nodeId": NODE_ID}, timeout=5)
+            response = requests.post(HEARTBEAT_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5)
             if response.status_code != 200:
                 print(f"[{NODE_ID}] Heartbeat failed (HTTP {response.status_code})")
         except Exception as e:
@@ -153,9 +184,9 @@ def heartbeat_loop():
 def fetch_global_model():
     """Fetches the latest global model weights from the Aggregator."""
     try:
-        response = requests.get(GLOBAL_MODEL_URL, headers={"X-API-Key": API_KEY}, timeout=15)
+        response = requests.get(GLOBAL_MODEL_URL, headers=get_auth_headers(), timeout=15)
         if response.status_code == 401:
-            print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for global model fetch.")
+            print(f"[{NODE_ID}] Unauthorized! Invalid token for global model fetch.")
             return 0, []
         elif response.status_code == 200:
             data = response.json()
@@ -216,6 +247,11 @@ def get_data_loader():
 def train_and_send():
     """Main training loop for the Federated Learning client."""
     
+    # Step 0: Authenticate
+    if not authenticate():
+        print(f"[{NODE_ID}] Cannot proceed without authentication. Shutting down.")
+        return
+        
     # Step 1: Register with aggregator (blocks until successful)
     if not register_with_aggregator():
         print(f"[{NODE_ID}] Cannot proceed without registration. Shutting down.")
@@ -320,7 +356,7 @@ def train_and_send():
 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_WEIGHTS_URL, headers={"X-API-Key": API_KEY}, json={
+            response = requests.post(AGGREGATOR_WEIGHTS_URL, headers=get_auth_headers(), json={
                 "nodeId": NODE_ID, 
                 "weights": trained_weights, 
                 "loss": avg_loss,
@@ -328,7 +364,7 @@ def train_and_send():
                 "accuracy": true_accuracy
             }, timeout=30)
             if response.status_code == 401:
-                print(f"[{NODE_ID}] Unauthorized! Invalid API_KEY for sending weights.")
+                print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")
             elif response.status_code == 403:
                 print(f"[{NODE_ID}] Not registered! Attempting re-registration...")
                 register_with_aggregator(max_retries=5)

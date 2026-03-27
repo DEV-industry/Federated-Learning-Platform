@@ -51,9 +51,6 @@ public class AggregatorApplication {
     @Value("${fl.security.threshold:5.0}")
     private double safetyThreshold;
 
-    @Value("${API_KEY}")
-    private String apiKey;
-
     @Value("${fl.min.quorum:2}")
     private int minQuorum;
 
@@ -285,13 +282,7 @@ public class AggregatorApplication {
 
     @PostMapping("/weights")
     public synchronized ResponseEntity<Map<String, Object>> receiveWeights(
-            @RequestHeader(value = "X-API-Key", required = false) String requestApiKey,
             @RequestBody WeightPayload payload) {
-
-        if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
-            System.out.println("Unauthorized access attempt to /weights from " + payload.getNodeId());
-            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "Unauthorized"));
-        }
 
         // Verify node is registered
         Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(payload.getNodeId());
@@ -608,12 +599,7 @@ public class AggregatorApplication {
     }
 
     @GetMapping("/global-model")
-    public ResponseEntity<Map<String, Object>> getGlobalModel(
-            @RequestHeader(value = "X-API-Key", required = false) String requestApiKey) {
-        if (requestApiKey == null || !requestApiKey.equals(apiKey)) {
-            System.out.println("Unauthorized access attempt to /global-model");
-            return ResponseEntity.status(401).body(Map.of("status", "error", "message", "Unauthorized"));
-        }
+    public ResponseEntity<Map<String, Object>> getGlobalModel() {
 
         return ResponseEntity.ok(Map.of(
             "currentRound", currentRound,

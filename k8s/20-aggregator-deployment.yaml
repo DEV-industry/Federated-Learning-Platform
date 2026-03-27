@@ -116,11 +116,16 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: SPRING_JPA_HIBERNATE_DDL_AUTO
               value: "update"
-            - name: API_KEY
+            - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: fl-secrets
-                  key: API_KEY
+                  key: JWT_SECRET
+            - name: NODE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: fl-secrets
+                  key: NODE_SECRET
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
