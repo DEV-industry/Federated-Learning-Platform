@@ -361,7 +361,8 @@ def train_and_send():
                 "weights": trained_weights, 
                 "loss": avg_loss,
                 "dpEnabled": DP_ENABLED,
-                "accuracy": true_accuracy
+                "accuracy": true_accuracy,
+                "roundNumber": current_round
             }, timeout=30)
             if response.status_code == 401:
                 print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")

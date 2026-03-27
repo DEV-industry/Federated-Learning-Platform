@@ -29,7 +29,8 @@ public class AggregationConsumer {
                 weights, 
                 message.getLoss(), 
                 message.getAccuracy(), 
-                message.getDpEnabled()
+                message.getDpEnabled(),
+                message.getRoundNumber()
             );
 
         } catch (Exception e) {

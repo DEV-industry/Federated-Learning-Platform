@@ -6,15 +6,17 @@ public class ModelSubmissionMessage {
     private Double loss;
     private Double accuracy;
     private Boolean dpEnabled;
+    private Integer roundNumber;
 
     public ModelSubmissionMessage() {}
 
-    public ModelSubmissionMessage(String nodeId, String modelPath, Double loss, Double accuracy, Boolean dpEnabled) {
+    public ModelSubmissionMessage(String nodeId, String modelPath, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
         this.nodeId = nodeId;
         this.modelPath = modelPath;
         this.loss = loss;
         this.accuracy = accuracy;
         this.dpEnabled = dpEnabled;
+        this.roundNumber = roundNumber;
     }
 
     public String getNodeId() { return nodeId; }
@@ -31,4 +33,7 @@ public class ModelSubmissionMessage {
 
     public Boolean getDpEnabled() { return dpEnabled; }
     public void setDpEnabled(Boolean dpEnabled) { this.dpEnabled = dpEnabled; }
+
+    public Integer getRoundNumber() { return roundNumber; }
+    public void setRoundNumber(Integer roundNumber) { this.roundNumber = roundNumber; }
 }

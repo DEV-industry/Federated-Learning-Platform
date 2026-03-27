@@ -55,7 +55,13 @@ public class AggregatorApplication {
     private int minQuorum;
 
     @Value("${fl.quorum.timeout-seconds:120}")
-    private int quorumTimeoutSeconds;
+    private int quorumTimeoutSeconds; // Legacy, kept for fallback if needed
+
+    @Value("${fl.round.timeout.seconds:300}")
+    private int roundTimeoutSeconds;
+
+    @Value("${fl.round.min.completion.percentage:0.7}")
+    private double minCompletionPercentage;
 
     @Value("${fl.heartbeat.stale-threshold-seconds:60}")
     private int heartbeatStaleThresholdSeconds;
@@ -70,8 +76,8 @@ public class AggregatorApplication {
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
 
-    // Track when the first weight submission for the current round arrived (for quorum timeout)
-    private volatile LocalDateTime firstSubmissionTime = null;
+    // Track when the current round started
+    private volatile LocalDateTime roundStartTime = null;
 
     @jakarta.annotation.PostConstruct
     public void init() {
@@ -98,6 +104,7 @@ public class AggregatorApplication {
                 }
             }
         }
+        this.roundStartTime = LocalDateTime.now();
     }
 
     public static void main(String[] args) {
@@ -250,13 +257,22 @@ public class AggregatorApplication {
 
     @Scheduled(fixedDelayString = "${fl.quorum.check-interval-ms:10000}")
     public synchronized void checkQuorumTimeout() {
-        if (firstSubmissionTime != null && !nodeWeights.isEmpty()) {
-            long secondsWaiting = java.time.Duration.between(firstSubmissionTime, LocalDateTime.now()).getSeconds();
-            if (secondsWaiting >= quorumTimeoutSeconds && nodeWeights.size() >= 1) {
-                System.out.println("Quorum timeout reached (" + quorumTimeoutSeconds + "s). "
-                    + "Aggregating with " + nodeWeights.size() + " nodes (quorum: " + minQuorum + ").");
-                aggregateWeights();
-                broadcastUpdate();
+        if (roundStartTime != null) {
+            long secondsWaiting = java.time.Duration.between(roundStartTime, LocalDateTime.now()).getSeconds();
+            if (secondsWaiting >= roundTimeoutSeconds) {
+                if (nodeWeights.size() >= minQuorum) {
+                    System.out.println("Round timeout reached (" + roundTimeoutSeconds + "s). "
+                        + "Aggregating with " + nodeWeights.size() + " nodes (min quorum: " + minQuorum + ").");
+                    aggregateWeights();
+                    broadcastUpdate();
+                } else {
+                    System.out.println("Round timeout reached but insufficient nodes (" + nodeWeights.size() + " < " + minQuorum + "). Skipping round.");
+                    this.nodeWeights.clear();
+                    this.nodeLosses.clear();
+                    this.nodeAccuracies.clear();
+                    this.roundStartTime = LocalDateTime.now();
+                    broadcastUpdate();
+                }
             }
         }
     }
@@ -284,6 +300,12 @@ public class AggregatorApplication {
     public synchronized ResponseEntity<Map<String, Object>> receiveWeights(
             @RequestBody WeightPayload payload) {
 
+        // Validate round
+        if (payload.getRoundNumber() == null || payload.getRoundNumber() != currentRound) {
+            System.out.println("Discarded weights from " + payload.getNodeId() +": invalid or outdated round (got " + payload.getRoundNumber() + ", expected " + currentRound + ")");
+            return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Outdated round number"));
+        }
+
         // Verify node is registered
         Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(payload.getNodeId());
         if (nodeOpt.isEmpty()) {
@@ -308,7 +330,7 @@ public class AggregatorApplication {
             minioService.uploadWeights(path, data);
 
             ModelSubmissionMessage msg = new ModelSubmissionMessage(
-                    payload.getNodeId(), path, payload.getLoss(), payload.getAccuracy(), payload.getDpEnabled());
+                    payload.getNodeId(), path, payload.getLoss(), payload.getAccuracy(), payload.getDpEnabled(), payload.getRoundNumber());
             
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
             
@@ -319,7 +341,12 @@ public class AggregatorApplication {
         }
     }
 
-    public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled) {
+    public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
+        if (roundNumber == null || roundNumber != currentRound) {
+            System.out.println("Processing skipped for nodeId " + nodeId + ": outdated round (got " + roundNumber + ", expected " + currentRound + ")");
+            return;
+        }
+
         System.out.println("Processing submitted weights from queue for node: " + nodeId);
         nodeWeights.put(nodeId, weights);
         if (loss != null) {
@@ -334,15 +361,11 @@ public class AggregatorApplication {
             nodeDpStatus.put(nodeId, false);
         }
 
-        // Track first submission time for quorum timeout
-        if (firstSubmissionTime == null) {
-            firstSubmissionTime = LocalDateTime.now();
-        }
+        long activeNodes = registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
+        int targetQuorum = (int) Math.ceil(activeNodes * minCompletionPercentage);
 
         // Check if we've reached the dynamic quorum
-        int effectiveQuorum = Math.min(minQuorum,
-                (int) registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
-        if (effectiveQuorum < 1) effectiveQuorum = 1;
+        int effectiveQuorum = Math.max(minQuorum, targetQuorum);
 
         if (nodeWeights.size() >= effectiveQuorum) {
             aggregateWeights();
@@ -438,7 +461,7 @@ public class AggregatorApplication {
             this.nodeWeights.clear();
             this.nodeLosses.clear();
             this.nodeAccuracies.clear();
-            this.firstSubmissionTime = null;
+            this.roundStartTime = LocalDateTime.now();
             return;
         }
 
@@ -486,7 +509,7 @@ public class AggregatorApplication {
         this.nodeWeights.clear();
         this.nodeLosses.clear();
         this.nodeAccuracies.clear();
-        this.firstSubmissionTime = null;
+        this.roundStartTime = LocalDateTime.now();
 
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound
                 + " (aggregated " + validWeights.size() + " nodes)");
@@ -540,7 +563,7 @@ public class AggregatorApplication {
         this.nodeSecurityStatus.clear();
         this.nodeRejectionCount.clear();
         this.nodeDpStatus.clear();
-        this.firstSubmissionTime = null;
+        this.roundStartTime = LocalDateTime.now();
         // Note: registered nodes are NOT cleared — only training state
         System.out.println("Emergency Reset Completed. Database and MinIO cleared. State back to Round 0.");
         broadcastUpdate();
@@ -645,6 +668,7 @@ class WeightPayload {
     private Double loss;
     private Boolean dpEnabled;
     private Double accuracy;
+    private Integer roundNumber;
 
     public String getNodeId() { return nodeId; }
     public void setNodeId(String nodeId) { this.nodeId = nodeId; }
@@ -656,4 +680,6 @@ class WeightPayload {
     public void setDpEnabled(Boolean dpEnabled) { this.dpEnabled = dpEnabled; }
     public Double getAccuracy() { return accuracy; }
     public void setAccuracy(Double accuracy) { this.accuracy = accuracy; }
+    public Integer getRoundNumber() { return roundNumber; }
+    public void setRoundNumber(Integer roundNumber) { this.roundNumber = roundNumber; }
 }
