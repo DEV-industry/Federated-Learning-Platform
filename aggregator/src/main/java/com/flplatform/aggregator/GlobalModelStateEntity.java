@@ -1,6 +1,8 @@
 package com.flplatform.aggregator;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -13,7 +15,7 @@ public class GlobalModelStateEntity {
     @Column(nullable = false)
     private int currentRound;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.VARBINARY)
     @Column(columnDefinition = "BYTEA")
     private byte[] globalWeightsBlob;
 

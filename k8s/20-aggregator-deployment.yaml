@@ -44,8 +44,8 @@ spec:
               echo "PostgreSQL is ready!"
       containers:
         - name: aggregator
-          image: your-registry/fl-aggregator:latest
-          imagePullPolicy: IfNotPresent
+          image: fl-aggregator:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8080
               name: http

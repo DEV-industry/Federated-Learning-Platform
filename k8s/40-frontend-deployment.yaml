@@ -26,8 +26,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: your-registry/fl-frontend:latest
-          imagePullPolicy: IfNotPresent
+          image: fl-frontend:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 3000
               name: http

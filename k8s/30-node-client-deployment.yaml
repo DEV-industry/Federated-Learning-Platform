@@ -51,8 +51,8 @@ spec:
               echo "Aggregator is ready!"
       containers:
         - name: node-client
-          image: your-registry/fl-node-client:latest
-          imagePullPolicy: IfNotPresent
+          image: fl-node-client:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8000
               name: http
