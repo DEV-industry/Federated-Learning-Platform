@@ -4,6 +4,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @RestController
@@ -19,6 +22,22 @@ public class AuthController {
         this.jwtUtil = jwtUtil;
     }
 
+    private String calculateExpectedHash(String nodeId) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec secretKeySpec = new SecretKeySpec(expectedNodeSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(secretKeySpec);
+            byte[] hmacBytes = mac.doFinal(nodeId.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hmacBytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to calculate HMAC", e);
+        }
+    }
+
     @PostMapping("/auth")
     public ResponseEntity<Map<String, Object>> authenticate(@RequestBody Map<String, String> payload) {
         String nodeId = payload.get("nodeId");
@@ -31,7 +50,9 @@ public class AuthController {
             ));
         }
 
-        if (nodeSecret == null || !nodeSecret.equals(expectedNodeSecret)) {
+        String expectedHash = calculateExpectedHash(nodeId);
+
+        if (nodeSecret == null || !nodeSecret.equals(expectedHash)) {
             return ResponseEntity.status(401).body(Map.of(
                 "status", "error",
                 "message", "Invalid credentials"

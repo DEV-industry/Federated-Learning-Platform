@@ -3,9 +3,10 @@ import requests
 import threading
 import signal
 import sys
-import uuid
 import socket
 import random
+import hmac
+import hashlib
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -27,8 +28,11 @@ REGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/register"
 HEARTBEAT_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/heartbeat"
 UNREGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/unregister"
 
-# Dynamic identity: auto-generate UUID if NODE_ID not explicitly set
-NODE_ID = os.getenv("NODE_ID", str(uuid.uuid4()))
+# Dynamic identity: must be set from environment (e.g., downward API in K8s)
+NODE_ID = os.getenv("NODE_ID")
+if not NODE_ID:
+    print("FATAL ERROR: NODE_ID environment variable is missing. It must be provided.")
+    sys.exit(1)
 
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
@@ -50,9 +54,10 @@ def authenticate(max_retries=30, retry_delay=5):
         if _shutdown_flag.is_set():
             return False
         try:
+            node_token = hmac.new(NODE_SECRET.encode(), NODE_ID.encode(), hashlib.sha256).hexdigest()
             response = requests.post(AUTH_URL, json={
                 "nodeId": NODE_ID,
-                "nodeSecret": NODE_SECRET
+                "nodeSecret": node_token
             }, timeout=10)
             if response.status_code == 200:
                 JWT_TOKEN = response.json().get("token")

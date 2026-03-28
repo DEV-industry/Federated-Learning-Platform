@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: fl-node-client
   namespace: fl-platform
@@ -8,9 +8,8 @@ metadata:
     app.kubernetes.io/part-of: federated-learning
     app.kubernetes.io/component: node-client
 spec:
+  serviceName: "fl-node-client-svc"
   replicas: 5
-  # This is the KEY scalability lever. Scale with:
-  #   kubectl scale deployment fl-node-client -n fl-platform --replicas=1000
   selector:
     matchLabels:
       app: fl-node-client
@@ -23,7 +22,6 @@ spec:
     spec:
       terminationGracePeriodSeconds: 30
       affinity:
-        # Spread nodes across different cluster machines to simulate distributed devices
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
             - weight: 100
@@ -36,7 +34,6 @@ spec:
                         - fl-node-client
                 topologyKey: kubernetes.io/hostname
       initContainers:
-        # Wait for the Aggregator to be ready before starting node clients
         - name: wait-for-aggregator
           image: busybox:1.36
           command:
@@ -57,9 +54,10 @@ spec:
             - containerPort: 8000
               name: http
           env:
-            # NODE_ID is intentionally NOT set here.
-            # The Python client auto-generates a UUID on startup.
-            # This enables dynamic scaling without identity conflicts.
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: DP_ENABLED
               valueFrom:
                 configMapKeyRef:
