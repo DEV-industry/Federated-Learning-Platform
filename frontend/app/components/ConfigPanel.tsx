@@ -4,15 +4,15 @@ import { Settings } from "lucide-react";
 export default function ConfigPanel({
   expectedNodesInput,
   setExpectedNodesInput,
-  safetyThresholdInput,
-  setSafetyThresholdInput,
+  maliciousFractionInput,
+  setMaliciousFractionInput,
   onApply,
   status,
 }: {
   expectedNodesInput: string;
   setExpectedNodesInput: (v: string) => void;
-  safetyThresholdInput: string;
-  setSafetyThresholdInput: (v: string) => void;
+  maliciousFractionInput: string;
+  setMaliciousFractionInput: (v: string) => void;
   onApply: () => void;
   status: any;
 }) {
@@ -35,14 +35,14 @@ export default function ConfigPanel({
           />
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-gray-500">Safety Threshold</label>
+          <label className="text-xs font-medium text-gray-500">Malicious Fraction</label>
           <input
             type="number"
-            step="0.1"
-            min="0.1"
-            max="100.0"
-            value={safetyThresholdInput}
-            onChange={(e) => setSafetyThresholdInput(e.target.value)}
+            step="0.05"
+            min="0.0"
+            max="0.9"
+            value={maliciousFractionInput}
+            onChange={(e) => setMaliciousFractionInput(e.target.value)}
             className="w-16 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-center text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
           />
         </div>

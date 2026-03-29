@@ -19,7 +19,7 @@ export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [expectedNodesInput, setExpectedNodesInput] = useState<string>("");
-  const [safetyThresholdInput, setSafetyThresholdInput] = useState<string>("");
+  const [maliciousFractionInput, setMaliciousFractionInput] = useState<string>("");
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -28,7 +28,7 @@ export default function Home() {
         .then((data) => {
           setStatus(data);
           if (!expectedNodesInput) setExpectedNodesInput(data.expectedNodes?.toString() || "2");
-          if (!safetyThresholdInput) setSafetyThresholdInput(data.safetyThreshold?.toString() || "5.0");
+          if (!maliciousFractionInput) setMaliciousFractionInput(data.maliciousFraction?.toString() || "0.3");
         })
         .catch((err) => console.error(err));
 
@@ -67,7 +67,7 @@ export default function Home() {
     return () => {
       client.deactivate();
     };
-  }, [expectedNodesInput, safetyThresholdInput]);
+  }, [expectedNodesInput, maliciousFractionInput]);
 
   const resetTraining = async () => {
     if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
@@ -87,10 +87,10 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           expectedNodes: parseInt(expectedNodesInput),
-          safetyThreshold: parseFloat(safetyThresholdInput),
+          maliciousFraction: parseFloat(maliciousFractionInput),
         }),
       });
-      alert(`Config updated! Required Nodes: ${expectedNodesInput}, Safety Threshold: ${safetyThresholdInput}`);
+      alert(`Config updated! Required Nodes: ${expectedNodesInput}, Malicious Fraction: ${maliciousFractionInput}`);
     } catch (err) {
       console.error(err);
     }
@@ -133,8 +133,8 @@ export default function Home() {
         <ConfigPanel
           expectedNodesInput={expectedNodesInput}
           setExpectedNodesInput={setExpectedNodesInput}
-          safetyThresholdInput={safetyThresholdInput}
-          setSafetyThresholdInput={setSafetyThresholdInput}
+          maliciousFractionInput={maliciousFractionInput}
+          setMaliciousFractionInput={setMaliciousFractionInput}
           onApply={updateConfig}
           status={status}
         />

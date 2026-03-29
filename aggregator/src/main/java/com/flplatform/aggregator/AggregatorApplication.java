@@ -48,8 +48,8 @@ public class AggregatorApplication {
     @Autowired
     private org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
-    @Value("${fl.security.threshold:5.0}")
-    private double safetyThreshold;
+    @Value("${fl.security.malicious-fraction:0.3}")
+    private double maliciousFraction;
 
     @Value("${fl.min.quorum:2}")
     private int minQuorum;
@@ -413,9 +413,9 @@ public class AggregatorApplication {
             updated = true;
         }
 
-        if (config.containsKey("safetyThreshold")) {
-            this.safetyThreshold = ((Number) config.get("safetyThreshold")).doubleValue();
-            message.append("safetyThreshold=").append(this.safetyThreshold).append(" ");
+        if (config.containsKey("maliciousFraction")) {
+            this.maliciousFraction = ((Number) config.get("maliciousFraction")).doubleValue();
+            message.append("maliciousFraction=").append(this.maliciousFraction).append(" ");
             updated = true;
         }
 
@@ -451,28 +451,69 @@ public class AggregatorApplication {
     }
 
     private void aggregateWeights() {
-        System.out.println("Starting FedAvg for round " + (currentRound + 1) + " with "
+        System.out.println("Starting FedAvg (Multi-Krum) for round " + (currentRound + 1) + " with "
                 + nodeWeights.size() + " node submissions...");
 
         List<List<Double>> validWeights = new ArrayList<>();
         int prevRoundParamCount = this.globalWeights != null ? this.globalWeights.size() : 0;
+        int n = nodeWeights.size();
 
-        for (Map.Entry<String, List<Double>> entry : nodeWeights.entrySet()) {
-            String nodeId = entry.getKey();
-            List<Double> w = entry.getValue();
-
-            if (this.currentRound == 0 || prevRoundParamCount == 0) {
-                nodeSecurityStatus.put(nodeId, "Accepted");
-                validWeights.add(w);
+        if (this.currentRound == 0 || prevRoundParamCount == 0) {
+            // First round: Acccept all natively
+            for (Map.Entry<String, List<Double>> entry : nodeWeights.entrySet()) {
+                nodeSecurityStatus.put(entry.getKey(), "Accepted");
+                validWeights.add(entry.getValue());
+            }
+        } else {
+            // Multi-Krum logic
+            int f = (int) Math.floor(n * this.maliciousFraction);
+            // Krum requires at least n - f - 2 > 0 neighbors to calculate score.
+            // If n is too small, fallback to standard FedAvg without rejection
+            int numNeighbors = n - f - 2;
+            
+            if (numNeighbors < 1) {
+                System.out.println("Warning: Not enough nodes for Multi-Krum (n=" + n + ", f=" + f + "). Accepting all.");
+                for (Map.Entry<String, List<Double>> entry : nodeWeights.entrySet()) {
+                    nodeSecurityStatus.put(entry.getKey(), "Accepted");
+                    validWeights.add(entry.getValue());
+                }
             } else {
-                double distance = calculateDistance(w, this.globalWeights);
-                if (distance > this.safetyThreshold) {
-                    System.out.println("SUSPICIOUS node detected: " + nodeId + " with distance " + distance);
-                    nodeSecurityStatus.put(nodeId, "Rejected");
-                    nodeRejectionCount.put(nodeId, nodeRejectionCount.getOrDefault(nodeId, 0) + 1);
-                } else {
-                    nodeSecurityStatus.put(nodeId, "Accepted");
-                    validWeights.add(w);
+                List<String> nodeIds = new ArrayList<>(nodeWeights.keySet());
+                Map<String, Double> krumScores = new HashMap<>();
+
+                // Calculate pairwise distances
+                for (int i = 0; i < n; i++) {
+                    String idA = nodeIds.get(i);
+                    List<Double> distances = new ArrayList<>();
+                    for (int j = 0; j < n; j++) {
+                        if (i == j) continue;
+                        String idB = nodeIds.get(j);
+                        distances.add(calculateDistance(nodeWeights.get(idA), nodeWeights.get(idB)));
+                    }
+                    distances.sort(Double::compareTo);
+
+                    double score = 0.0;
+                    for (int k = 0; k < numNeighbors; k++) {
+                        score += distances.get(k);
+                    }
+                    krumScores.put(idA, score);
+                }
+
+                // Sort nodes by Krum score (ascending)
+                nodeIds.sort((id1, id2) -> Double.compare(krumScores.get(id1), krumScores.get(id2)));
+
+                // Select top m = n - f nodes
+                int m = Math.max(1, n - f);
+                for (int i = 0; i < n; i++) {
+                    String nodeId = nodeIds.get(i);
+                    if (i < m) {
+                        nodeSecurityStatus.put(nodeId, "Accepted");
+                        validWeights.add(nodeWeights.get(nodeId));
+                    } else {
+                        System.out.println("SUSPICIOUS node rejected by Multi-Krum: " + nodeId + " with score " + krumScores.get(nodeId));
+                        nodeSecurityStatus.put(nodeId, "Rejected");
+                        nodeRejectionCount.put(nodeId, nodeRejectionCount.getOrDefault(nodeId, 0) + 1);
+                    }
                 }
             }
         }
@@ -637,7 +678,7 @@ public class AggregatorApplication {
         result.put("expectedNodes", minQuorum);
         result.put("registeredNodes", activeRegistered);
         result.put("currentRound", currentRound);
-        result.put("safetyThreshold", safetyThreshold);
+        result.put("maliciousFraction", maliciousFraction);
         result.put("nodeDetails", nodeDetails);
         return result;
     }
