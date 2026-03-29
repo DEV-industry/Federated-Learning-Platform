@@ -499,7 +499,7 @@ public class AggregatorApplication {
         this.globalWeights = newGlobalWeights;
 
         // Persist round to training_rounds table
-        RoundEntity entity = new RoundEntity(currentRound, avgLoss, accuracy, LocalDateTime.now());
+        RoundEntity entity = new RoundEntity(currentRound, avgLoss, accuracy, LocalDateTime.now(), new HashMap<>(nodeSecurityStatus));
         roundRepository.save(entity);
 
         // Persist global model state to database (for replicated aggregator support)
@@ -652,11 +652,12 @@ public class AggregatorApplication {
         List<RoundEntity> records = roundRepository.findAll();
         List<Map<String, Object>> history = new ArrayList<>();
         for (RoundEntity r : records) {
-            history.add(Map.of(
-                "round", r.getRoundNumber(),
-                "loss", r.getAvgLoss(),
-                "accuracy", r.getAccuracy()
-            ));
+            Map<String, Object> roundMap = new HashMap<>();
+            roundMap.put("round", r.getRoundNumber());
+            roundMap.put("loss", r.getAvgLoss());
+            roundMap.put("accuracy", r.getAccuracy());
+            roundMap.put("nodeStatuses", r.getNodeStatuses() != null ? r.getNodeStatuses() : new HashMap<>());
+            history.add(roundMap);
         }
         return history;
     }

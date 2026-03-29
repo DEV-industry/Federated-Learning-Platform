@@ -8,16 +8,31 @@ export default function NodeActivityHeatmap({ nodeDetails, history }: { nodeDeta
     if (nodeDetails.length === 0) return "bg-gray-100";
     const node = nodeDetails[row];
     if (!node) return "bg-gray-100";
+    
+    // col === 6 is "Current", meaning the latest active training details
     if (col === 6) {
       if (node.status === "Rejected") return "bg-red-300";
       if (node.status === "Accepted") return "bg-blue-400";
       return "bg-blue-200";
     }
-    const intensity = Math.random();
-    if (intensity > 0.7) return "bg-blue-400";
-    if (intensity > 0.4) return "bg-blue-300";
-    if (intensity > 0.2) return "bg-blue-200";
-    return "bg-blue-100";
+
+    // Historical data: Match based on history array which contains nodeStatuses mapped to node ids
+    if (history && history.length > 0) {
+      // The timeSlots are Round -6 to Current. So colIdx 0 is round (currentRound - 6)
+      // history array might have up to N records. We grab the right one.
+      const currentRound = history.length;
+      const targetRoundIdx = currentRound - (6 - col); // Because col is 0..5 for historical
+      
+      const targetHistoryRecord = history.find(h => h.round === targetRoundIdx);
+      if (targetHistoryRecord && targetHistoryRecord.nodeStatuses && targetHistoryRecord.nodeStatuses[node.nodeId]) {
+        const pastStatus = targetHistoryRecord.nodeStatuses[node.nodeId];
+        if (pastStatus === "Rejected") return "bg-red-300";
+        if (pastStatus === "Accepted") return "bg-blue-400";
+      }
+    }
+    
+    // Fallback or "did not participate"
+    return "bg-gray-100";
   };
 
   return (
