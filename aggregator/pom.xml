@@ -19,8 +19,8 @@
         <protobuf.version>3.25.3</protobuf.version>
         <os.plugin.version>1.7.1</os.plugin.version>
         <protobuf.plugin.version>0.6.1</protobuf.plugin.version>
-        <os.detected.classifier>windows-x86_64</os.detected.classifier>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -117,5 +117,17 @@
                 </executions>
             </plugin>
         </plugins>
-    </build>
+    <profiles>
+        <profile>
+            <id>os-windows-workaround</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <os.detected.classifier>windows-x86_64</os.detected.classifier>
+            </properties>
+        </profile>
+    </profiles>
 </project>
