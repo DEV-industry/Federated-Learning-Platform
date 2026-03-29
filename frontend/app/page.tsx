@@ -114,7 +114,7 @@ export default function Home() {
   const lossTrend = currLoss <= prevLoss ? "down" : "up";
 
   const nodeDetails = (status?.nodeDetails || []).filter(
-    (node: any) => node.status === "ACTIVE"
+    (node: any) => node.status === "Accepted" || node.status === "Rejected"
   );
 
   return (
