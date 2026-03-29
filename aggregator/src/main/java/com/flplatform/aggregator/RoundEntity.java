@@ -15,7 +15,7 @@ public class RoundEntity {
     private double accuracy;
     private LocalDateTime timestamp;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "round_node_statuses", joinColumns = @JoinColumn(name = "round_id"))
     @MapKeyColumn(name = "node_id")
     @Column(name = "status")

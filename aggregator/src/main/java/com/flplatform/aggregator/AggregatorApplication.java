@@ -420,7 +420,7 @@ public class AggregatorApplication {
         }
 
         if (updated) {
-            int effectiveQuorum = Math.min(this.minQuorum,
+            int effectiveQuorum = Math.max(this.minQuorum,
                     (int) registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
             if (effectiveQuorum < 1) effectiveQuorum = 1;
 

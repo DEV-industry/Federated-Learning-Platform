@@ -113,9 +113,7 @@ export default function Home() {
   const lossDelta = Math.abs(currLoss - prevLoss).toFixed(4);
   const lossTrend = currLoss <= prevLoss ? "down" : "up";
 
-  const nodeDetails = (status?.nodeDetails || []).filter(
-    (node: any) => node.status === "Accepted" || node.status === "Rejected"
-  );
+  const nodeDetails = status?.nodeDetails || [];
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex">

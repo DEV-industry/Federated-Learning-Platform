@@ -97,7 +97,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 40s
     networks:
       - fl-network
 
