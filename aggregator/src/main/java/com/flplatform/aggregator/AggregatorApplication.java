@@ -296,23 +296,18 @@ public class AggregatorApplication {
         }
     }
 
-    @PostMapping("/weights")
-    public synchronized ResponseEntity<Map<String, Object>> receiveWeights(
-            @RequestBody WeightPayload payload) {
+    public synchronized boolean validateAndQueueWeights(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
 
         // Validate round
-        if (payload.getRoundNumber() == null || payload.getRoundNumber() != currentRound) {
-            System.out.println("Discarded weights from " + payload.getNodeId() +": invalid or outdated round (got " + payload.getRoundNumber() + ", expected " + currentRound + ")");
-            return ResponseEntity.badRequest().body(Map.of("status", "error", "message", "Outdated round number"));
+        if (roundNumber == null || roundNumber != currentRound) {
+            System.out.println("Discarded weights from " + nodeId +": invalid or outdated round (got " + roundNumber + ", expected " + currentRound + ")");
+            return false;
         }
 
         // Verify node is registered
-        Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(payload.getNodeId());
+        Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(nodeId);
         if (nodeOpt.isEmpty()) {
-            return ResponseEntity.status(403).body(Map.of(
-                "status", "error",
-                "message", "Node not registered. POST to /api/nodes/register first."
-            ));
+            return false;
         }
 
         // Update heartbeat on weight submission
@@ -321,24 +316,32 @@ public class AggregatorApplication {
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         registeredNodeRepository.save(node);
 
-        System.out.println("Received weights from " + payload.getNodeId() + " (sending to MinIO and RabbitMQ queue)");
+        System.out.println("Received weights from " + nodeId + " (sending to MinIO and RabbitMQ queue)");
 
         try {
-            byte[] data = this.serializeWeights(payload.getWeights());
+            byte[] data = this.serializeWeights(weights);
             long timestamp = System.currentTimeMillis();
-            String path = "client-models/round-" + currentRound + "/" + payload.getNodeId() + "-" + timestamp + ".bin";
+            String path = "client-models/round-" + currentRound + "/" + nodeId + "-" + timestamp + ".bin";
             minioService.uploadWeights(path, data);
 
             ModelSubmissionMessage msg = new ModelSubmissionMessage(
-                    payload.getNodeId(), path, payload.getLoss(), payload.getAccuracy(), payload.getDpEnabled(), payload.getRoundNumber());
+                    nodeId, path, loss, accuracy, dpEnabled, roundNumber);
             
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
             
-            return ResponseEntity.ok(Map.of("status", "success", "message", "Weights received for " + payload.getNodeId() + " and queued successfully."));
+            return true;
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("status", "error", "message", "Internal server error queueing weights."));
+            return false;
         }
+    }
+    
+    public int getCurrentRound() {
+        return currentRound;
+    }
+
+    public List<Double> getGlobalWeights() {
+        return globalWeights;
     }
 
     public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
@@ -621,14 +624,7 @@ public class AggregatorApplication {
         return result;
     }
 
-    @GetMapping("/global-model")
-    public ResponseEntity<Map<String, Object>> getGlobalModel() {
 
-        return ResponseEntity.ok(Map.of(
-            "currentRound", currentRound,
-            "globalWeights", globalWeights
-        ));
-    }
 
     @GetMapping("/model/download")
     public ResponseEntity<byte[]> downloadModel() {
@@ -663,24 +659,4 @@ public class AggregatorApplication {
     }
 }
 
-class WeightPayload {
-    private String nodeId;
-    private List<Double> weights;
-    private Double loss;
-    private Boolean dpEnabled;
-    private Double accuracy;
-    private Integer roundNumber;
 
-    public String getNodeId() { return nodeId; }
-    public void setNodeId(String nodeId) { this.nodeId = nodeId; }
-    public List<Double> getWeights() { return weights; }
-    public void setWeights(List<Double> weights) { this.weights = weights; }
-    public Double getLoss() { return loss; }
-    public void setLoss(Double loss) { this.loss = loss; }
-    public Boolean getDpEnabled() { return dpEnabled; }
-    public void setDpEnabled(Boolean dpEnabled) { this.dpEnabled = dpEnabled; }
-    public Double getAccuracy() { return accuracy; }
-    public void setAccuracy(Double accuracy) { this.accuracy = accuracy; }
-    public Integer getRoundNumber() { return roundNumber; }
-    public void setRoundNumber(Integer roundNumber) { this.roundNumber = roundNumber; }
-}

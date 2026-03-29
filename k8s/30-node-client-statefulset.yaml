@@ -88,6 +88,11 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: AGGREGATOR_BASE_URL
+            - name: AGGREGATOR_GRPC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: AGGREGATOR_GRPC_URL
             - name: NODE_SECRET
               valueFrom:
                 secretKeyRef:

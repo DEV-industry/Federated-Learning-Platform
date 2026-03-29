@@ -51,6 +51,7 @@ services:
     build: ./aggregator
     ports:
       - "8080:8080"
+      - "9090:9090"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
@@ -80,7 +81,7 @@ services:
   node_client_1:
     build: ./node_client
     environment:
-      - AGGREGATOR_URL=http://aggregator:8080/api/weights
+      - AGGREGATOR_GRPC_URL=aggregator:9090
       - NODE_ID=node-1
       - DP_ENABLED=true
       - DP_NOISE_MULTIPLIER=0.01
@@ -94,7 +95,7 @@ services:
   node_client_2:
     build: ./node_client
     environment:
-      - AGGREGATOR_URL=http://aggregator:8080/api/weights
+      - AGGREGATOR_GRPC_URL=aggregator:9090
       - NODE_ID=node-2
       - DP_ENABLED=true
       - DP_NOISE_MULTIPLIER=0.01

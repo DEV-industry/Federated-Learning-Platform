@@ -12,6 +12,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
+import grpc
+import federated_pb2
+import federated_pb2_grpc
 from fastapi import FastAPI
 import os
 
@@ -22,8 +25,7 @@ app = FastAPI()
 # =========================================================================
 
 AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "http://aggregator:8080")
-AGGREGATOR_WEIGHTS_URL = os.getenv("AGGREGATOR_URL", f"{AGGREGATOR_BASE_URL}/api/weights")
-GLOBAL_MODEL_URL = AGGREGATOR_WEIGHTS_URL.replace("/weights", "/global-model")
+AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_GRPC_URL", "aggregator:9090")
 REGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/register"
 HEARTBEAT_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/heartbeat"
 UNREGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/unregister"
@@ -187,15 +189,22 @@ def heartbeat_loop():
 # =========================================================================
 
 def fetch_global_model():
-    """Fetches the latest global model weights from the Aggregator."""
+    """Fetches the latest global model weights from the Aggregator via gRPC."""
+    if not JWT_TOKEN:
+        return 0, []
+        
     try:
-        response = requests.get(GLOBAL_MODEL_URL, headers=get_auth_headers(), timeout=15)
-        if response.status_code == 401:
+        channel = grpc.insecure_channel(AGGREGATOR_GRPC_URL)
+        stub = federated_pb2_grpc.FederatedServiceStub(channel)
+        metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
+        request = federated_pb2.GlobalModelRequest(node_id=NODE_ID)
+        response = stub.GetGlobalModel(request, metadata=metadata, timeout=15)
+        return response.current_round, list(response.global_weights)
+    except grpc.RpcError as e:
+        if e.code() == grpc.StatusCode.UNAUTHENTICATED:
             print(f"[{NODE_ID}] Unauthorized! Invalid token for global model fetch.")
-            return 0, []
-        elif response.status_code == 200:
-            data = response.json()
-            return data.get("currentRound", 0), data.get("globalWeights", [])
+        else:
+            print(f"[{NODE_ID}] gRPC error fetching global model: {e.code()} - {e.details()}")
     except Exception as e:
         print(f"[{NODE_ID}] Error fetching global model: {e}")
     return 0, []
@@ -359,23 +368,33 @@ def train_and_send():
         else:
             trained_weights = trained_weights_list
 
-        print(f"[{NODE_ID}] Sending updated weights to Aggregator (Loss: {avg_loss:.4f})...")
+        print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
         try:
-            response = requests.post(AGGREGATOR_WEIGHTS_URL, headers=get_auth_headers(), json={
-                "nodeId": NODE_ID, 
-                "weights": trained_weights, 
-                "loss": avg_loss,
-                "dpEnabled": DP_ENABLED,
-                "accuracy": true_accuracy,
-                "roundNumber": current_round
-            }, timeout=30)
-            if response.status_code == 401:
+            channel = grpc.insecure_channel(AGGREGATOR_GRPC_URL)
+            stub = federated_pb2_grpc.FederatedServiceStub(channel)
+            metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
+            
+            request = federated_pb2.WeightRequest(
+                node_id=NODE_ID,
+                weights=trained_weights,
+                loss=avg_loss,
+                dp_enabled=DP_ENABLED,
+                accuracy=true_accuracy,
+                round_number=current_round
+            )
+            response = stub.SubmitWeights(request, metadata=metadata, timeout=30)
+            
+            if response.status == "error":
+                print(f"[{NODE_ID}] Aggregator rejected weights: {response.message}")
+            else:
+                print(f"[{NODE_ID}] Aggregator response: {response.message}")
+                
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.UNAUTHENTICATED:
                 print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")
-            elif response.status_code == 403:
-                print(f"[{NODE_ID}] Not registered! Attempting re-registration...")
                 register_with_aggregator(max_retries=5)
             else:
-                print(f"[{NODE_ID}] Aggregator response: {response.json()}")
+                print(f"[{NODE_ID}] Failed to send weights via gRPC: {e.code()} - {e.details()}")
         except Exception as e:
             print(f"[{NODE_ID}] Failed to send weights: {e}")
             

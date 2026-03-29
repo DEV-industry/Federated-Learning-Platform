@@ -33,7 +33,7 @@ public class SecurityConfig {
                 // Public endpoints
                 .requestMatchers("/api/auth").permitAll()
                 // Health/status endpoints for K8s probes and frontend dashboard
-                .requestMatchers("/api/status", "/api/history", "/api/global-model", "/api/nodes", "/api/training/reset", "/api/config").permitAll()
+                .requestMatchers("/api/status", "/api/history", "/api/nodes", "/api/training/reset", "/api/config", "/api/model/download").permitAll()
                 // WebSocket endpoints must be accessible
                 .requestMatchers("/ws/**", "/ws-sockjs/**").permitAll()
                 // All other API endpoints require authentication
