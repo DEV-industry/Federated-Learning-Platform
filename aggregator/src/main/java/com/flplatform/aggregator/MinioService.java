@@ -32,18 +32,31 @@ public class MinioService {
                 .credentials(accessKey, secretKey)
                 .build();
 
-        try {
-            boolean exists = minioClient.bucketExists(
-                    BucketExistsArgs.builder().bucket(bucket).build());
-            if (!exists) {
-                minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-                System.out.println("MinIO bucket created: " + bucket);
-            } else {
-                System.out.println("MinIO bucket already exists: " + bucket);
+        int maxRetries = 10;
+        int delayMs = 3000;
+
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                boolean exists = minioClient.bucketExists(
+                        BucketExistsArgs.builder().bucket(bucket).build());
+                if (!exists) {
+                    minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                    System.out.println("MinIO bucket created: " + bucket);
+                } else {
+                    System.out.println("MinIO bucket already exists: " + bucket);
+                }
+                return; // Success
+            } catch (Exception e) {
+                System.out.println("MinIO not ready (attempt " + (i + 1) + "/" + maxRetries + "): " + e.getMessage());
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while waiting for MinIO", ie);
+                }
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize MinIO bucket: " + e.getMessage(), e);
         }
+        throw new RuntimeException("Failed to initialize MinIO bucket after " + maxRetries + " attempts");
     }
 
     /**

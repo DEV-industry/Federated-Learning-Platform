@@ -117,6 +117,7 @@
                 </executions>
             </plugin>
         </plugins>
+    </build>
     <profiles>
         <profile>
             <id>os-windows-workaround</id>

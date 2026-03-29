@@ -49,7 +49,7 @@ def get_auth_headers():
         return {"Authorization": f"Bearer {JWT_TOKEN}"}
     return {}
 
-def authenticate(max_retries=30, retry_delay=5):
+def authenticate(max_retries=60, retry_delay=5):
     global JWT_TOKEN
     print(f"[{NODE_ID}] Authenticating with aggregator at {AUTH_URL}...")
     for attempt in range(max_retries):
@@ -63,14 +63,16 @@ def authenticate(max_retries=30, retry_delay=5):
             }, timeout=10)
             if response.status_code == 200:
                 JWT_TOKEN = response.json().get("token")
-                print(f"[{NODE_ID}] Authenticated successfully.")
+                print(f"[{NODE_ID}] Authenticated successfully. JWT obtained.")
                 return True
             else:
                 print(f"[{NODE_ID}] Auth failed (HTTP {response.status_code}): {response.text}")
+                # If it's a 401, maybe the secret is wrong - we still retry in case it's a startup race
         except requests.exceptions.ConnectionError:
-            print(f"[{NODE_ID}] Aggregator not ready. Retry {attempt + 1}/{max_retries}...")
+            print(f"[{NODE_ID}] ConnectionError: Aggregator at {AGGREGATOR_BASE_URL} not reachable. Retry {attempt + 1}/{max_retries}...")
         except Exception as e:
-            print(f"[{NODE_ID}] Auth error: {e}")
+            print(f"[{NODE_ID}] Unexpected auth error ({type(e).__name__}): {e}")
+        
         time.sleep(retry_delay)
     return False
 

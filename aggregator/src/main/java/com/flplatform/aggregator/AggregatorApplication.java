@@ -81,30 +81,48 @@ public class AggregatorApplication {
 
     @jakarta.annotation.PostConstruct
     public void init() {
-        // Restore round count from training_rounds table
-        long count = roundRepository.count();
-        if (count > 0) {
-            this.currentRound = (int) count;
-            System.out.println("Resumed FedAvg from Database at Round " + this.currentRound);
-        }
+        int maxRetries = 15;
+        int delayMs = 3000;
 
-        // Restore global model weights from MinIO via path stored in DB
-        Optional<GlobalModelStateEntity> latestState = globalModelStateRepository.findTopByOrderByCurrentRoundDesc();
-        if (latestState.isPresent()) {
-            GlobalModelStateEntity state = latestState.get();
-            this.currentRound = state.getCurrentRound();
-            if (state.getModelPath() != null && !state.getModelPath().isBlank()) {
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                // Restore round count from training_rounds table
+                long count = roundRepository.count();
+                if (count > 0) {
+                    this.currentRound = (int) count;
+                    System.out.println("Resumed FedAvg from Database at Round " + this.currentRound);
+                }
+
+                // Restore global model weights from MinIO via path stored in DB
+                Optional<GlobalModelStateEntity> latestState = globalModelStateRepository.findTopByOrderByCurrentRoundDesc();
+                if (latestState.isPresent()) {
+                    GlobalModelStateEntity state = latestState.get();
+                    this.currentRound = state.getCurrentRound();
+                    if (state.getModelPath() != null && !state.getModelPath().isBlank()) {
+                        byte[] blob = minioService.downloadWeights(state.getModelPath());
+                        this.globalWeights = deserializeWeights(blob);
+                        System.out.println("Restored global model from MinIO: " + state.getModelPath()
+                                + " (Round " + this.currentRound + ", " + this.globalWeights.size() + " parameters)");
+                    }
+                }
+                this.roundStartTime = LocalDateTime.now();
+                return; // Everything successful
+            } catch (Exception e) {
+                System.err.println("Database or MinIO not ready (attempt " + (i + 1) + "/" + maxRetries + "): " + e.getMessage());
                 try {
-                    byte[] blob = minioService.downloadWeights(state.getModelPath());
-                    this.globalWeights = deserializeWeights(blob);
-                    System.out.println("Restored global model from MinIO: " + state.getModelPath()
-                            + " (Round " + this.currentRound + ", " + this.globalWeights.size() + " parameters)");
-                } catch (Exception e) {
-                    System.err.println("Failed to restore weights from MinIO: " + e.getMessage());
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted while waiting for dependencies", ie);
                 }
             }
         }
-        this.roundStartTime = LocalDateTime.now();
+        throw new RuntimeException("Failed to initialize Aggregator state after " + maxRetries + " attempts");
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> healthCheck() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
     }
 
     public static void main(String[] args) {
