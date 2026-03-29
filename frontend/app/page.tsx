@@ -154,9 +154,6 @@ export default function Home() {
           status={status}
         />
 
-        {/* Round Pipeline Stepper */}
-        <RoundStepper globalStage={globalStage} currentRound={currentRound} />
-
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           <MetricCard
@@ -194,20 +191,23 @@ export default function Home() {
           />
         </div>
 
-        {/* Network Graph + Event Terminal Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-          <NetworkGraph nodeActivity={nodeActivity} globalStage={globalStage} />
-          <EventTerminal eventLogs={eventLogs} />
-        </div>
-
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
           <NodeActivityHeatmap nodeDetails={nodeDetails} history={history} />
           <AccuracyChart history={history} />
         </div>
 
+        {/* Network Graph + Event Terminal Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+          <NetworkGraph nodeActivity={nodeActivity} globalStage={globalStage} />
+          <EventTerminal eventLogs={eventLogs} />
+        </div>
+
+        {/* Round Pipeline Stepper */}
+        <RoundStepper globalStage={globalStage} currentRound={currentRound} />
+
         {/* Bottom Row: Table + Locations */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
           <div className="lg:col-span-2">
             <NodeClientsTable nodeDetails={nodeDetails} nodeActivity={nodeActivity} />
           </div>

@@ -53,10 +53,9 @@
   }
 }
 
-/* Stepper dot animation */
-@keyframes stepper-dot {
-  0% { left: 0; opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { left: calc(100% - 8px); opacity: 0; }
+/* Stepper fill animation */
+@keyframes stepper-fill {
+  0% { width: 0%; }
+  50% { width: 100%; }
+  100% { width: 0%; }
 }

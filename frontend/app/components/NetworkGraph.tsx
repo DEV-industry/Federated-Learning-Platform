@@ -9,11 +9,11 @@ interface NodeActivity {
 }
 
 const STATUS_COLORS: Record<string, { fill: string; glow: string; label: string }> = {
-  TRAINING: { fill: "#3b82f6", glow: "#3b82f680", label: "Training" },
-  DOWNLOADING: { fill: "#8b5cf6", glow: "#8b5cf680", label: "Downloading" },
-  UPLOADING: { fill: "#f59e0b", glow: "#f59e0b80", label: "Uploading" },
-  EVALUATING: { fill: "#10b981", glow: "#10b98180", label: "Evaluating" },
-  IDLE: { fill: "#6b7280", glow: "#6b728040", label: "Idle" },
+  TRAINING: { fill: "#3b82f6", glow: "#3b82f630", label: "Training" },
+  DOWNLOADING: { fill: "#8b5cf6", glow: "#8b5cf630", label: "Downloading" },
+  UPLOADING: { fill: "#f59e0b", glow: "#f59e0b30", label: "Uploading" },
+  EVALUATING: { fill: "#10b981", glow: "#10b98130", label: "Evaluating" },
+  IDLE: { fill: "#9ca3af", glow: "#9ca3af20", label: "Idle" },
 };
 
 function getStatusColor(status: string) {
@@ -28,6 +28,7 @@ export default function NetworkGraph({
   globalStage: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
   const particlesRef = useRef<Array<{
     fromIdx: number;
@@ -43,10 +44,8 @@ export default function NetworkGraph({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const container = canvas.parentElement;
-    if (!container) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -73,7 +72,6 @@ export default function NetworkGraph({
         const color = getStatusColor(status);
 
         if (status === "UPLOADING") {
-          // Particles flow FROM node TO center
           if (Math.random() < 0.4) {
             particlesRef.current.push({
               fromIdx: idx,
@@ -84,7 +82,6 @@ export default function NetworkGraph({
             });
           }
         } else if (status === "DOWNLOADING") {
-          // Particles flow FROM center TO node
           if (Math.random() < 0.4) {
             particlesRef.current.push({
               fromIdx: idx,
@@ -96,7 +93,6 @@ export default function NetworkGraph({
           }
         }
       });
-      // Limit particles
       if (particlesRef.current.length > 100) {
         particlesRef.current = particlesRef.current.slice(-80);
       }
@@ -130,7 +126,7 @@ export default function NetworkGraph({
 
       const total = nodeIds.length || 1;
 
-      // Draw connection lines
+      // Draw connection lines (dashed for idle, solid for active)
       nodeIds.forEach((_, idx) => {
         const pos = getNodePos(idx, total);
         const act = nodeActivity[nodeIds[idx]];
@@ -140,9 +136,17 @@ export default function NetworkGraph({
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle = status === "IDLE" ? "#1f2937" : sc.fill + "40";
-        ctx.lineWidth = status === "IDLE" ? 1 : 2;
+        if (status === "IDLE") {
+          ctx.setLineDash([6, 4]);
+          ctx.strokeStyle = "#e5e7eb";
+          ctx.lineWidth = 1;
+        } else {
+          ctx.setLineDash([]);
+          ctx.strokeStyle = sc.fill + "35";
+          ctx.lineWidth = 2;
+        }
         ctx.stroke();
+        ctx.setLineDash([]);
       });
 
       // Draw particles
@@ -165,12 +169,12 @@ export default function NetworkGraph({
         ctx.fillStyle = p.color;
         ctx.fill();
 
-        // Glow trail
-        const grad = ctx.createRadialGradient(x, y, 0, x, y, 12);
-        grad.addColorStop(0, p.color + "60");
+        // Subtle glow
+        const grad = ctx.createRadialGradient(x, y, 0, x, y, 10);
+        grad.addColorStop(0, p.color + "40");
         grad.addColorStop(1, p.color + "00");
         ctx.beginPath();
-        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
 
@@ -178,43 +182,35 @@ export default function NetworkGraph({
       });
 
       // Draw center hub (Aggregator)
-      const hubPulse = Math.sin(timeRef.current * 3) * 0.15 + 1;
-      const hubRadius = 28 * hubPulse;
+      const hubPulse = Math.sin(timeRef.current * 3) * 0.08 + 1;
+      const hubRadius = 26 * hubPulse;
       const isAggregating = globalStage === "AGGREGATING";
 
-      // Hub glow
-      const hubGlow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, hubRadius * 2.5);
-      hubGlow.addColorStop(0, isAggregating ? "#8b5cf640" : "#3b82f620");
-      hubGlow.addColorStop(1, "#00000000");
+      // Hub shadow
+      const hubShadow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, hubRadius * 2);
+      hubShadow.addColorStop(0, isAggregating ? "#8b5cf620" : "#3b82f615");
+      hubShadow.addColorStop(1, "#00000000");
       ctx.beginPath();
-      ctx.arc(centerX, centerY, hubRadius * 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = hubGlow;
+      ctx.arc(centerX, centerY, hubRadius * 2, 0, Math.PI * 2);
+      ctx.fillStyle = hubShadow;
       ctx.fill();
 
       // Hub circle
       ctx.beginPath();
       ctx.arc(centerX, centerY, hubRadius, 0, Math.PI * 2);
-      const hubGrad = ctx.createRadialGradient(
-        centerX - 5, centerY - 5, 0,
-        centerX, centerY, hubRadius
-      );
-      hubGrad.addColorStop(0, isAggregating ? "#a78bfa" : "#60a5fa");
-      hubGrad.addColorStop(1, isAggregating ? "#7c3aed" : "#2563eb");
-      ctx.fillStyle = hubGrad;
+      ctx.fillStyle = isAggregating ? "#7c3aed" : "#3b82f6";
       ctx.fill();
 
-      // Hub ring
-      if (isAggregating) {
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, hubRadius + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = "#a78bfa60";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
+      // Hub border
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, hubRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = isAggregating ? "#a78bfa" : "#60a5fa";
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       // Hub label
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px system-ui";
+      ctx.font = "bold 15px system-ui, -apple-system, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("AGG", centerX, centerY);
@@ -227,16 +223,16 @@ export default function NetworkGraph({
         const sc = getStatusColor(status);
         const isActive = status !== "IDLE";
 
-        const nodePulse = isActive ? Math.sin(timeRef.current * 4 + idx) * 0.12 + 1 : 1;
-        const nodeRadius = 20 * nodePulse;
+        const nodePulse = isActive ? Math.sin(timeRef.current * 4 + idx) * 0.08 + 1 : 1;
+        const nodeRadius = 18 * nodePulse;
 
-        // Node glow for active
+        // Node shadow for active
         if (isActive) {
-          const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, nodeRadius * 2.5);
+          const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, nodeRadius * 2);
           glow.addColorStop(0, sc.glow);
           glow.addColorStop(1, "#00000000");
           ctx.beginPath();
-          ctx.arc(pos.x, pos.y, nodeRadius * 2.5, 0, Math.PI * 2);
+          ctx.arc(pos.x, pos.y, nodeRadius * 2, 0, Math.PI * 2);
           ctx.fillStyle = glow;
           ctx.fill();
         }
@@ -245,43 +241,37 @@ export default function NetworkGraph({
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
         if (isActive) {
-          const grad = ctx.createRadialGradient(
-            pos.x - 3, pos.y - 3, 0,
-            pos.x, pos.y, nodeRadius
-          );
-          grad.addColorStop(0, sc.fill + "ff");
-          grad.addColorStop(1, sc.fill + "cc");
-          ctx.fillStyle = grad;
+          ctx.fillStyle = sc.fill;
         } else {
-          ctx.fillStyle = "#1f2937";
+          ctx.fillStyle = "#f3f4f6";
         }
         ctx.fill();
 
         // Node border
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = isActive ? sc.fill : "#374151";
-        ctx.lineWidth = isActive ? 2 : 1;
+        ctx.strokeStyle = isActive ? sc.fill : "#d1d5db";
+        ctx.lineWidth = isActive ? 2 : 1.5;
         ctx.stroke();
 
-        // Node label (short ID)
+        // Node label
         const shortId = nodeId.length > 6 ? nodeId.substring(nodeId.length - 4) : nodeId;
-        ctx.fillStyle = isActive ? "#ffffff" : "#9ca3af";
-        ctx.font = "bold 14px system-ui";
+        ctx.fillStyle = isActive ? "#ffffff" : "#6b7280";
+        ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(shortId, pos.x, pos.y);
 
         // Status label below
-        ctx.fillStyle = isActive ? sc.fill : "#4b5563";
-        ctx.font = "11px system-ui";
+        ctx.fillStyle = isActive ? sc.fill : "#9ca3af";
+        ctx.font = "11px system-ui, -apple-system, sans-serif";
         ctx.fillText(sc.label, pos.x, pos.y + nodeRadius + 16);
 
         // Detail text
         if (act?.detail && isActive) {
-          ctx.fillStyle = "#6b7280";
-          ctx.font = "10px system-ui";
-          const detailText = act.detail.length > 22 ? act.detail.substring(0, 22) + "…" : act.detail;
+          ctx.fillStyle = "#9ca3af";
+          ctx.font = "10px system-ui, -apple-system, sans-serif";
+          const detailText = act.detail.length > 24 ? act.detail.substring(0, 24) + "…" : act.detail;
           ctx.fillText(detailText, pos.x, pos.y + nodeRadius + 30);
         }
       });
@@ -294,9 +284,9 @@ export default function NetworkGraph({
   }, [dimensions, nodeIds, nodeActivity, globalStage]);
 
   return (
-    <div className="bg-[#0a0e17] border border-[#1c2333] rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.3)] overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[#1c2333]">
-        <h3 className="text-sm font-semibold text-gray-300">Network Topology</h3>
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-800">Network Topology</h3>
         <div className="flex items-center gap-3">
           {Object.entries(STATUS_COLORS).filter(([k]) => k !== "IDLE").map(([key, val]) => (
             <span key={key} className="flex items-center gap-1.5 text-[10px] text-gray-500">
@@ -306,14 +296,13 @@ export default function NetworkGraph({
           ))}
         </div>
       </div>
-      <div className="relative w-full" style={{ height: "320px" }}>
-        {nodeIds.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-600 text-sm">
+      <div ref={containerRef} className="relative w-full bg-gray-50/30" style={{ height: "320px" }}>
+        {nodeIds.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm z-10">
             <span>No active nodes — waiting for connections...</span>
           </div>
-        ) : (
-          <canvas ref={canvasRef} className="w-full h-full" />
         )}
+        <canvas ref={canvasRef} className="w-full h-full block" />
       </div>
     </div>
   );

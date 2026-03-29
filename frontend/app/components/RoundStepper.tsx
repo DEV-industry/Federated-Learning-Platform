@@ -54,9 +54,9 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                   className={`
                     w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 relative
                     ${isActive
-                      ? "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 scale-110"
+                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/25 scale-110"
                       : isCompleted
-                        ? "bg-emerald-500 text-white shadow-md shadow-emerald-500/20"
+                        ? "bg-emerald-500 text-white shadow-sm"
                         : "bg-gray-100 text-gray-400"
                     }
                   `}
@@ -65,9 +65,6 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                     <Check className="w-4 h-4" />
                   ) : (
                     <Icon className={`w-4 h-4 ${isActive ? "animate-pulse" : ""}`} />
-                  )}
-                  {isActive && (
-                    <span className="absolute inset-0 rounded-xl bg-blue-400/30 animate-ping" />
                   )}
                 </div>
 
@@ -81,7 +78,7 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                   {stage.label}
                 </span>
 
-                {/* Tooltip description */}
+                {/* Description */}
                 <span
                   className={`
                     mt-0.5 text-[10px] transition-colors duration-300 text-center max-w-[100px]
@@ -94,22 +91,19 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
 
               {/* Connector line */}
               {idx < STAGES.length - 1 && (
-                <div className="flex-shrink-0 w-12 h-[2px] relative -mt-6">
-                  <div className="absolute inset-0 bg-gray-200 rounded-full" />
+                <div className="flex-shrink-0 w-16 h-[3px] relative -mt-6 rounded-full bg-gray-200 overflow-hidden">
+                  {/* Filled portion */}
                   <div
                     className={`
                       absolute inset-y-0 left-0 rounded-full transition-all duration-700
                       ${isCompleted
                         ? "w-full bg-emerald-400"
                         : isActive
-                          ? "w-1/2 bg-gradient-to-r from-blue-500 to-transparent"
+                          ? "bg-blue-400 animate-[stepper-fill_2s_ease-in-out_infinite]"
                           : "w-0"
                       }
                     `}
                   />
-                  {isActive && (
-                    <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-500 animate-[stepper-dot_1.5s_ease-in-out_infinite] shadow-lg shadow-blue-500/50" />
-                  )}
                 </div>
               )}
             </div>
