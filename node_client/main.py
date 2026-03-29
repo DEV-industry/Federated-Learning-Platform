@@ -43,6 +43,8 @@ NODE_SECRET = os.getenv("NODE_SECRET", "def_node_secret")
 AUTH_URL = f"{AGGREGATOR_BASE_URL}/api/auth"
 JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
+ACTIVITY_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/activity"
+ACTIVITY_REPORT_BATCH_INTERVAL = int(os.getenv("ACTIVITY_REPORT_BATCH_INTERVAL", "100"))
 
 def get_auth_headers():
     if JWT_TOKEN:
@@ -229,6 +231,17 @@ def evaluate_global_model(model):
             
     return correct / total
 
+def report_activity(status, detail=""):
+    """Report node activity status to the aggregator for live dashboard visualization."""
+    try:
+        requests.post(ACTIVITY_URL, headers=get_auth_headers(), json={
+            "nodeId": NODE_ID,
+            "status": status,
+            "detail": detail
+        }, timeout=3)
+    except Exception:
+        pass  # Non-critical, don't let reporting failures affect training
+
 # =========================================================================
 # DATA LOADING — Hash-based dynamic partitioning (no more hardcoded splits)
 # =========================================================================
@@ -287,6 +300,7 @@ def train_and_send():
 
     while not _shutdown_flag.is_set():
         # 1. Fetch the latest global model
+        report_activity("DOWNLOADING", "Fetching global model")
         current_round, global_weights = fetch_global_model()
         
         if current_round < last_trained_round:
@@ -310,6 +324,7 @@ def train_and_send():
             print(f"[{NODE_ID}] Round 0: Using initial local random weights.")
 
         # Evaluate true global accuracy BEFORE local training
+        report_activity("EVALUATING", "Running accuracy test on full MNIST")
         true_accuracy = evaluate_global_model(model)
         print(f"[{NODE_ID}] True Global Accuracy on full test set: {true_accuracy * 100:.2f}%")
 
@@ -318,6 +333,7 @@ def train_and_send():
         global_weights_copy = [param.clone().detach() for param in model.parameters()]
 
         # 3. Train on local MNIST subset for 1 epoch
+        report_activity("TRAINING", "Starting epoch")
         print(f"[{NODE_ID}] Starting local training (1 epoch)...")
         model.train()
         optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
@@ -343,6 +359,8 @@ def train_and_send():
             
             if batch_idx % 150 == 0:
                 print(f"[{NODE_ID}] Batch {batch_idx}/{len(dataloader)}\tLoss: {loss.item():.4f}")
+            if batch_idx % ACTIVITY_REPORT_BATCH_INTERVAL == 0:
+                report_activity("TRAINING", f"Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
                 
         avg_loss = running_loss / len(dataloader)
         print(f"[{NODE_ID}] Finished epoch. Average Loss: {avg_loss:.4f}")
@@ -371,6 +389,7 @@ def train_and_send():
             trained_weights = trained_weights_list
 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
+        report_activity("UPLOADING", f"Sending weights (Loss: {avg_loss:.4f})")
         try:
             channel = grpc.insecure_channel(AGGREGATOR_GRPC_URL)
             stub = federated_pb2_grpc.FederatedServiceStub(channel)
@@ -402,6 +421,7 @@ def train_and_send():
             
         # 5. Track state and delay to observe the rounds progressing cleanly
         last_trained_round = current_round
+        report_activity("IDLE", f"Completed round {current_round}")
         print("-" * 50)
         time.sleep(5)
 

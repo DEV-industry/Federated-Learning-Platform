@@ -19,8 +19,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 @SpringBootApplication
@@ -72,6 +74,13 @@ public class AggregatorApplication {
     private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
     private final Map<String, Integer> nodeRejectionCount = new ConcurrentHashMap<>();
     private final Map<String, Boolean> nodeDpStatus = new ConcurrentHashMap<>();
+
+    // === LIVE ACTIVITY TRACKING ===
+    private final Map<String, Map<String, String>> nodeActivity = new ConcurrentHashMap<>();
+    private final LinkedList<String> eventLogs = new LinkedList<>();
+    private static final int MAX_EVENT_LOGS = 50;
+    private volatile String globalStage = "IDLE";
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private List<Double> globalWeights = new ArrayList<>();
     private int currentRound = 0;
@@ -296,6 +305,96 @@ public class AggregatorApplication {
     }
 
     // =========================================================================
+    // LIVE ACTIVITY TRACKING — Real-time node status + event log
+    // =========================================================================
+
+    private void addEventLog(String message) {
+        String timestamp = LocalDateTime.now().format(TIME_FMT);
+        String entry = "[" + timestamp + "] " + message;
+        synchronized (eventLogs) {
+            eventLogs.addLast(entry);
+            while (eventLogs.size() > MAX_EVENT_LOGS) {
+                eventLogs.removeFirst();
+            }
+        }
+    }
+
+    @PostMapping("/nodes/activity")
+    public ResponseEntity<Map<String, String>> reportActivity(@RequestBody Map<String, String> payload) {
+        String nodeId = payload.get("nodeId");
+        String status = payload.get("status");
+        String detail = payload.getOrDefault("detail", "");
+
+        if (nodeId == null || status == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "nodeId and status required"));
+        }
+
+        Map<String, String> activity = new HashMap<>();
+        activity.put("status", status);
+        activity.put("detail", detail);
+        nodeActivity.put(nodeId, activity);
+
+        // Generate event log based on status change
+        switch (status) {
+            case "DOWNLOADING":
+                addEventLog("\uD83D\uDCE5 " + nodeId + " is downloading global model");
+                break;
+            case "TRAINING":
+                if (!detail.isEmpty()) {
+                    addEventLog("\u26A1 " + nodeId + " training: " + detail);
+                } else {
+                    addEventLog("\uD83D\uDD04 " + nodeId + " started local training");
+                }
+                break;
+            case "UPLOADING":
+                addEventLog("\u2B06\uFE0F " + nodeId + " is uploading weights via gRPC");
+                break;
+            case "IDLE":
+                addEventLog("\u23F8\uFE0F " + nodeId + " is idle, waiting for next round");
+                break;
+            case "EVALUATING":
+                addEventLog("\uD83D\uDCCA " + nodeId + " is evaluating model accuracy");
+                break;
+            default:
+                addEventLog("\u2139\uFE0F " + nodeId + ": " + status + (detail.isEmpty() ? "" : " (" + detail + ")"));
+        }
+
+        // Update global stage based on aggregated node statuses
+        updateGlobalStage();
+        broadcastUpdate();
+
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
+    private void updateGlobalStage() {
+        if (nodeActivity.isEmpty()) {
+            globalStage = "IDLE";
+            return;
+        }
+
+        boolean anyTraining = false;
+        boolean anyDownloading = false;
+        boolean anyUploading = false;
+        boolean anyEvaluating = false;
+
+        for (Map<String, String> act : nodeActivity.values()) {
+            String s = act.getOrDefault("status", "IDLE");
+            switch (s) {
+                case "TRAINING": anyTraining = true; break;
+                case "DOWNLOADING": anyDownloading = true; break;
+                case "UPLOADING": anyUploading = true; break;
+                case "EVALUATING": anyEvaluating = true; break;
+            }
+        }
+
+        if (anyDownloading) globalStage = "DISTRIBUTING";
+        else if (anyTraining) globalStage = "TRAINING";
+        else if (anyEvaluating) globalStage = "EVALUATING";
+        else if (anyUploading) globalStage = "AGGREGATING";
+        else globalStage = "IDLE";
+    }
+
+    // =========================================================================
     // WEIGHT SUBMISSION (refactored for dynamic quorum)
     // =========================================================================
 
@@ -307,6 +406,11 @@ public class AggregatorApplication {
                 update.put("status", getStatus());
                 update.put("history", getHistory());
                 update.put("registeredNodes", activeNodes);
+                update.put("nodeActivity", new HashMap<>(nodeActivity));
+                synchronized (eventLogs) {
+                    update.put("eventLogs", new ArrayList<>(eventLogs));
+                }
+                update.put("globalStage", globalStage);
                 messagingTemplate.convertAndSend("/topic/updates", update);
             } catch (Exception e) {
                 System.err.println("Failed to broadcast update: " + e.getMessage());
@@ -451,6 +555,8 @@ public class AggregatorApplication {
     }
 
     private void aggregateWeights() {
+        globalStage = "AGGREGATING";
+        addEventLog("\uD83E\uDDE0 Starting FedAvg aggregation for round " + (currentRound + 1) + " with " + nodeWeights.size() + " nodes");
         System.out.println("Starting FedAvg (Multi-Krum) for round " + (currentRound + 1) + " with "
                 + nodeWeights.size() + " node submissions...");
 
@@ -571,8 +677,11 @@ public class AggregatorApplication {
         this.nodeWeights.clear();
         this.nodeLosses.clear();
         this.nodeAccuracies.clear();
+        this.nodeActivity.clear();
         this.roundStartTime = LocalDateTime.now();
+        this.globalStage = "IDLE";
 
+        addEventLog("\u2705 Round " + currentRound + " completed! Accuracy: " + String.format("%.2f%%", accuracy * 100) + ", Loss: " + String.format("%.4f", avgLoss));
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound
                 + " (aggregated " + validWeights.size() + " nodes)");
     }
@@ -625,8 +734,14 @@ public class AggregatorApplication {
         this.nodeSecurityStatus.clear();
         this.nodeRejectionCount.clear();
         this.nodeDpStatus.clear();
+        this.nodeActivity.clear();
+        synchronized (eventLogs) {
+            this.eventLogs.clear();
+        }
+        this.globalStage = "IDLE";
         this.roundStartTime = LocalDateTime.now();
         // Note: registered nodes are NOT cleared — only training state
+        addEventLog("\uD83D\uDDD1\uFE0F System reset. All training data cleared.");
         System.out.println("Emergency Reset Completed. Database and MinIO cleared. State back to Round 0.");
         broadcastUpdate();
         return Map.of("status", "success", "message", "Training reset to round 0.");
@@ -668,6 +783,10 @@ public class AggregatorApplication {
             detail.put("status", status);
             detail.put("rejectedRounds", rejections);
             detail.put("dpEnabled", dpEnabled);
+            // Attach live activity if available
+            if (nodeActivity.containsKey(nodeId)) {
+                detail.put("activity", nodeActivity.get(nodeId));
+            }
             nodeDetails.add(detail);
         }
 
@@ -680,6 +799,11 @@ public class AggregatorApplication {
         result.put("currentRound", currentRound);
         result.put("maliciousFraction", maliciousFraction);
         result.put("nodeDetails", nodeDetails);
+        result.put("globalStage", globalStage);
+        result.put("nodeActivity", new HashMap<>(nodeActivity));
+        synchronized (eventLogs) {
+            result.put("eventLogs", new ArrayList<>(eventLogs));
+        }
         return result;
     }
 

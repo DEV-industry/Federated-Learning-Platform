@@ -19,3 +19,44 @@
     border-radius: 9999px;
   }
 }
+
+/* Terminal scrollbar */
+.custom-terminal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-terminal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-terminal-scroll::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 9999px;
+}
+.custom-terminal-scroll::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Terminal cursor blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Terminal line entrance */
+@keyframes terminal-line {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stepper dot animation */
+@keyframes stepper-dot {
+  0% { left: 0; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { left: calc(100% - 8px); opacity: 0; }
+}

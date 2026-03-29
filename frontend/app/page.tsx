@@ -14,12 +14,18 @@ import AccuracyChart from "./components/AccuracyChart";
 import NodeClientsTable from "./components/NodeClientsTable";
 import NodeLocationsCard from "./components/NodeLocationsCard";
 import ConfigPanel from "./components/ConfigPanel";
+import RoundStepper from "./components/RoundStepper";
+import EventTerminal from "./components/EventTerminal";
+import NetworkGraph from "./components/NetworkGraph";
 
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [expectedNodesInput, setExpectedNodesInput] = useState<string>("");
   const [maliciousFractionInput, setMaliciousFractionInput] = useState<string>("");
+  const [eventLogs, setEventLogs] = useState<string[]>([]);
+  const [nodeActivity, setNodeActivity] = useState<Record<string, { status: string; detail: string }>>({});
+  const [globalStage, setGlobalStage] = useState<string>("IDLE");
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -29,6 +35,9 @@ export default function Home() {
           setStatus(data);
           if (!expectedNodesInput) setExpectedNodesInput(data.expectedNodes?.toString() || "2");
           if (!maliciousFractionInput) setMaliciousFractionInput(data.maliciousFraction?.toString() || "0.3");
+          if (data.eventLogs) setEventLogs(data.eventLogs);
+          if (data.nodeActivity) setNodeActivity(data.nodeActivity);
+          if (data.globalStage) setGlobalStage(data.globalStage);
         })
         .catch((err) => console.error(err));
 
@@ -53,6 +62,9 @@ export default function Home() {
             setStatus(data.status);
             const sortedHistory = data.history.sort((a: any, b: any) => a.round - b.round);
             setHistory(sortedHistory);
+            if (data.eventLogs) setEventLogs(data.eventLogs);
+            if (data.nodeActivity) setNodeActivity(data.nodeActivity);
+            if (data.globalStage) setGlobalStage(data.globalStage);
           }
         });
       },
@@ -75,6 +87,9 @@ export default function Home() {
       await fetch(`${API_URL}/api/training/reset`, { method: "DELETE" });
       setStatus(null);
       setHistory([]);
+      setEventLogs([]);
+      setNodeActivity({});
+      setGlobalStage("IDLE");
     } catch (err) {
       console.error("Failed to reset training system.", err);
     }
@@ -139,6 +154,9 @@ export default function Home() {
           status={status}
         />
 
+        {/* Round Pipeline Stepper */}
+        <RoundStepper globalStage={globalStage} currentRound={currentRound} />
+
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           <MetricCard
@@ -176,6 +194,12 @@ export default function Home() {
           />
         </div>
 
+        {/* Network Graph + Event Terminal Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
+          <NetworkGraph nodeActivity={nodeActivity} globalStage={globalStage} />
+          <EventTerminal eventLogs={eventLogs} />
+        </div>
+
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
           <NodeActivityHeatmap nodeDetails={nodeDetails} history={history} />
@@ -185,7 +209,7 @@ export default function Home() {
         {/* Bottom Row: Table + Locations */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <NodeClientsTable nodeDetails={nodeDetails} />
+            <NodeClientsTable nodeDetails={nodeDetails} nodeActivity={nodeActivity} />
           </div>
           <NodeLocationsCard nodeDetails={nodeDetails} />
         </div>
