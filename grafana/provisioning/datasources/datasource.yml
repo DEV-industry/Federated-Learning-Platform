@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # Use environment variables for the URL since docker-compose uses a docker network, and Kubernetes uses a Service DNS.
+    # In docker-compose, prometheus:9090 is reachable. In K8s, it should be overridable or use the same local name
+    url: http://prometheus:9090
+    access: proxy
+    isDefault: true
+    editable: false

@@ -16,9 +16,18 @@ import grpc
 import federated_pb2
 import federated_pb2_grpc
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Gauge, Counter
 import os
 
 app = FastAPI()
+
+# Prometheus Custom Metrics
+FL_ROUND_DURATION = Gauge('fl_round_duration_seconds', 'Duration of the federated learning round', ['nodeId'])
+MODELS_REJECTED = Counter('fl_models_rejected_total', 'Total number of models rejected by Multi-Krum', ['nodeId'])
+
+# Instrument app and expose /metrics endpoint
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 # =========================================================================
 # CONFIGURATION — K8s-native with Docker-compatible defaults
@@ -313,6 +322,8 @@ def train_and_send():
             time.sleep(5)
             continue
 
+        round_start_time = time.time()
+
         # 2. Update local model with global weights if available
         if current_round > 0 and global_weights:
             try:
@@ -407,6 +418,7 @@ def train_and_send():
             
             if response.status == "error":
                 print(f"[{NODE_ID}] Aggregator rejected weights: {response.message}")
+                MODELS_REJECTED.labels(nodeId=NODE_ID).inc()
             else:
                 print(f"[{NODE_ID}] Aggregator response: {response.message}")
                 
@@ -421,6 +433,10 @@ def train_and_send():
             
         # 5. Track state and delay to observe the rounds progressing cleanly
         last_trained_round = current_round
+        
+        round_duration = time.time() - round_start_time
+        FL_ROUND_DURATION.labels(nodeId=NODE_ID).set(round_duration)
+        
         report_activity("IDLE", f"Completed round {current_round}")
         print("-" * 50)
         time.sleep(5)

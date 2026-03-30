@@ -1,0 +1,50 @@
+{
+  "title": "Federated Learning Analytics",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "NodeId",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(fl_round_duration_seconds, nodeId)",
+        "refresh": 1,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Round Duration (Seconds)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "fl_round_duration_seconds{nodeId=~\"^$NodeId$\"}", "legendFormat": "{{nodeId}}"}],
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "Total Models Rejected",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "sum(fl_models_rejected_total{nodeId=~\"^$NodeId$\"})", "legendFormat": "Rejected"}],
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+    },
+    {
+      "title": "Aggregator CPU Usage",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "process_cpu_usage{job=\"aggregator\"}", "legendFormat": "CPU"}],
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8}
+    },
+    {
+      "title": "Aggregator JVM Memory Usage",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "jvm_memory_used_bytes{job=\"aggregator\"}", "legendFormat": "JVM Memory"}],
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8}
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

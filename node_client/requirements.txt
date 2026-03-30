@@ -7,3 +7,5 @@ numpy<2.0.0
 grpcio==1.62.1
 grpcio-tools==1.62.1
 protobuf==4.25.3
+prometheus-client==0.20.0
+prometheus-fastapi-instrumentator==7.0.0
