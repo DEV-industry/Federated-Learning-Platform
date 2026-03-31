@@ -1,0 +1,71 @@
+name: Tests (Python + Java)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-python:
+    runs-on: ubuntu-latest
+    name: Python Tests (Node Client)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: node_client/requirements.txt
+
+      - name: Install dependencies
+        working-directory: node_client
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate protobuf files
+        working-directory: node_client
+        run: python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. federated.proto
+
+      - name: Run pytest
+        working-directory: node_client
+        run: pytest tests/ -v --tb=short
+
+  test-java:
+    runs-on: ubuntu-latest
+    name: Java Tests (Aggregator)
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run Maven tests
+        working-directory: aggregator
+        run: mvn clean test -B
+
+  build-summary:
+    runs-on: ubuntu-latest
+    name: Build Summary
+    needs: [test-python, test-java]
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.test-python.result }}" = "failure" ] || [ "${{ needs.test-java.result }}" = "failure" ]; then
+            echo "❌ Some tests failed!"
+            exit 1
+          else
+            echo "✅ All tests passed!"
+          fi
