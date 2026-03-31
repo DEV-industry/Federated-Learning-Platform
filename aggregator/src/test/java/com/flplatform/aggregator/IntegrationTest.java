@@ -58,6 +58,8 @@ class IntegrationTest {
         registry.add("minio.bucket", () -> TEST_MINIO_BUCKET);
         registry.add("jwt.secret", () -> TEST_JWT_SECRET);
         registry.add("node.secret", () -> TEST_NODE_SECRET);
+        // Dynamiczny port gRPC (0 = losowy dostępny port)
+        registry.add("grpc.server.port", () -> 0);
     }
 
     @Test
