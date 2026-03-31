@@ -1,46 +1,33 @@
 package com.flplatform.aggregator.security;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class JwtUtilTest {
 
-    private JwtUtil jwtUtil;
+    private static final String TEST_JWT_SECRET = "test-jwt-secret-key-with-at-least-32-bytes";
+    private static final String TEST_NODE_ID = "test-node";
+    private static final String INVALID_TOKEN = "eyJhbGciOiJIUzI1NiJ9.NieprawidlowyPayload.NieprawidlowyPodpis";
 
-    @BeforeEach
-    void setUp() {
-        jwtUtil = new JwtUtil();
-        // Symulacja wstrzyknięcia klucza z application.properties
-        ReflectionTestUtils.setField(jwtUtil, "secret", "TwojBardzoTajnyKluczTestowyKtoryJestWystarczajacoDlugi123!");
-        ReflectionTestUtils.setField(jwtUtil, "expirationMs", 3600000L); // 1 godzina
-    }
+    private final JwtUtil jwtUtil = new JwtUtil(TEST_JWT_SECRET);
 
     @Test
     void shouldGenerateAndValidateToken() {
-        // given
-        String username = "testNode";
-
         // when
-        String token = jwtUtil.generateToken(username);
+        String token = jwtUtil.generateToken(TEST_NODE_ID);
 
         // then
         assertNotNull(token);
-        assertTrue(jwtUtil.validateToken(token));
-        assertEquals(username, jwtUtil.extractUsername(token));
+        assertEquals(TEST_NODE_ID, jwtUtil.validateTokenAndGetSubject(token));
     }
 
     @Test
-    void shouldReturnFalseForInvalidToken() {
-        // given
-        String invalidToken = "eyJhbGciOiJIUzI1NiJ9.NieprawidlowyPayload.NieprawidlowyPodpis";
-
+    void shouldReturnNullForInvalidToken() {
         // when
-        boolean isValid = jwtUtil.validateToken(invalidToken);
+        String subject = jwtUtil.validateTokenAndGetSubject(INVALID_TOKEN);
 
         // then
-        assertFalse(isValid);
+        assertNull(subject);
     }
 }
