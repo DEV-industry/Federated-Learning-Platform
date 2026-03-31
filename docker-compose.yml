@@ -60,13 +60,14 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: fluser
       RABBITMQ_DEFAULT_PASS: flpass
-      RABBITMQ_ERLANG_COOKIE: "fl-platform-secret-cookie-123"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
       interval: 10s
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - fl-network
 
@@ -214,4 +215,5 @@ networks:
 
 volumes:
   minio-data:
+  rabbitmq-data:
 

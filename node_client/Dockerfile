@@ -2,7 +2,7 @@ FROM python:3.10-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --default-timeout=1000 --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
-COPY main.py .
+COPY main.py he_manager.py ./
 COPY federated.proto .
 RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. federated.proto
 EXPOSE 8000
