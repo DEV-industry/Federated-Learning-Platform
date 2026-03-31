@@ -18,6 +18,10 @@ message WeightRequest {
     bool dp_enabled = 4;
     double accuracy = 5;
     int32 round_number = 6;
+    // Homomorphic Encryption fields
+    bool he_enabled = 7;
+    bytes encrypted_weights = 8;        // Serialized TenSEAL CKKS ciphertext
+    bytes he_context_public = 9;        // Serialized public TenSEAL context (for aggregation)
 }
 
 message WeightResponse {
@@ -32,4 +36,7 @@ message GlobalModelRequest {
 message GlobalModelResponse {
     int32 current_round = 1;
     repeated double global_weights = 2;
+    // HE: aggregated ciphertext returned when HE mode is active
+    bool he_enabled = 3;
+    bytes encrypted_global_weights = 4;
 }

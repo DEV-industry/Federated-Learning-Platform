@@ -27,7 +27,10 @@ public class FederatedGrpcService extends FederatedServiceGrpc.FederatedServiceI
                     request.getLoss(),
                     request.getAccuracy(),
                     request.getDpEnabled(),
-                    request.getRoundNumber());
+                    request.getRoundNumber(),
+                    request.getHeEnabled(),
+                    request.getEncryptedWeights().toByteArray(),
+                    request.getHeContextPublic().toByteArray());
 
             if (success) {
                 WeightResponse response = WeightResponse.newBuilder()
@@ -54,10 +57,18 @@ public class FederatedGrpcService extends FederatedServiceGrpc.FederatedServiceI
     @Override
     public void getGlobalModel(GlobalModelRequest request, StreamObserver<GlobalModelResponse> responseObserver) {
         try {
-            GlobalModelResponse response = GlobalModelResponse.newBuilder()
-                    .setCurrentRound(aggregatorContext.getCurrentRound())
-                    .addAllGlobalWeights(aggregatorContext.getGlobalWeights())
-                    .build();
+            GlobalModelResponse.Builder builder = GlobalModelResponse.newBuilder()
+                    .setCurrentRound(aggregatorContext.getCurrentRound());
+                    
+            if (aggregatorContext.isHeGlobalModelAvailable()) {
+                builder.setHeEnabled(true);
+                builder.setEncryptedGlobalWeights(com.google.protobuf.ByteString.copyFrom(aggregatorContext.getHeGlobalWeights()));
+            } else {
+                builder.setHeEnabled(false);
+                builder.addAllGlobalWeights(aggregatorContext.getGlobalWeights());
+            }
+
+            GlobalModelResponse response = builder.build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {

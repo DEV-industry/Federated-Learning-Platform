@@ -7,16 +7,20 @@ public class ModelSubmissionMessage {
     private Double accuracy;
     private Boolean dpEnabled;
     private Integer roundNumber;
+    private Boolean heEnabled;
+    private String heContextPath;
 
     public ModelSubmissionMessage() {}
 
-    public ModelSubmissionMessage(String nodeId, String modelPath, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
+    public ModelSubmissionMessage(String nodeId, String modelPath, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, String heContextPath) {
         this.nodeId = nodeId;
         this.modelPath = modelPath;
         this.loss = loss;
         this.accuracy = accuracy;
         this.dpEnabled = dpEnabled;
         this.roundNumber = roundNumber;
+        this.heEnabled = heEnabled;
+        this.heContextPath = heContextPath;
     }
 
     public String getNodeId() { return nodeId; }
@@ -36,4 +40,10 @@ public class ModelSubmissionMessage {
 
     public Integer getRoundNumber() { return roundNumber; }
     public void setRoundNumber(Integer roundNumber) { this.roundNumber = roundNumber; }
+
+    public Boolean getHeEnabled() { return heEnabled != null ? heEnabled : false; }
+    public void setHeEnabled(Boolean heEnabled) { this.heEnabled = heEnabled; }
+
+    public String getHeContextPath() { return heContextPath; }
+    public void setHeContextPath(String heContextPath) { this.heContextPath = heContextPath; }
 }

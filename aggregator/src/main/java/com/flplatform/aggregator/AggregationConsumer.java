@@ -21,7 +21,11 @@ public class AggregationConsumer {
         try {
             // Download weights from MinIO asynchronously
             byte[] blob = minioService.downloadWeights(message.getModelPath());
-            List<Double> weights = aggregatorApplication.deserializeWeights(blob);
+            
+            List<Double> weights = null;
+            if (!message.getHeEnabled()) {
+                weights = aggregatorApplication.deserializeWeights(blob);
+            }
 
             // Execute the FedAvg logic safely
             aggregatorApplication.processNodeSubmission(
@@ -30,7 +34,10 @@ public class AggregationConsumer {
                 message.getLoss(), 
                 message.getAccuracy(), 
                 message.getDpEnabled(),
-                message.getRoundNumber()
+                message.getRoundNumber(),
+                message.getHeEnabled(),
+                blob,
+                message.getHeContextPath()
             );
 
         } catch (Exception e) {

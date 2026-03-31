@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: he-sidecar
+  namespace: fl-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: he-sidecar
+  template:
+    metadata:
+      labels:
+        app: he-sidecar
+    spec:
+      containers:
+      - name: he-sidecar
+        image: fl-he-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: he-sidecar
+  namespace: fl-system
+spec:
+  ports:
+  - port: 8001
+  selector:
+    app: he-sidecar

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-client
+  namespace: fl-system
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: node-client
+  template:
+    metadata:
+      labels:
+        app: node-client
+    spec:
+      containers:
+      - name: client
+        image: fl-node-client:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        # Dynamic identifier for each replica pod
+        - name: NODE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: AGGREGATOR_BASE_URL
+          value: "http://aggregator:8080"
+        - name: AGGREGATOR_GRPC_URL
+          value: "aggregator:9090"
+        - name: NODE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: fl-secrets
+              key: node-secret
+        - name: DP_ENABLED
+          value: "true"
+        - name: HE_ENABLED
+          value: "true"
+        - name: DP_NOISE_MULTIPLIER
+          value: "0.01"
+        - name: FEDPROX_MU
+          valueFrom:
+            secretKeyRef:
+              name: fl-secrets
+              key: fedprox-mu
+        - name: DATA_PARTITION_FRACTION
+          value: "0.25"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"

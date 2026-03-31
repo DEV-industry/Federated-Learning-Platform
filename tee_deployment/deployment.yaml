@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-aggregator-sgx
+  labels:
+    app: fl-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fl-aggregator
+  template:
+    metadata:
+      labels:
+        app: fl-aggregator
+    spec:
+      # Required for SGX EPC memory access and Gramine
+      nodeSelector:
+        node.kubernetes.io/instance-type: Standard_DC8s_v3 # Example Azure Confidential Compute node type
+      containers:
+      - name: aggregator
+        image: your-repo/fl-aggregator-sgx:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        - containerPort: 9090
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres.fl-namespace.svc.cluster.local:5432/fldb"
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: fl-secrets
+              key: db-username
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fl-secrets
+              key: db-password
+        - name: FL_HE_ENABLED
+          value: "true"
+        - name: FL_AGGREGATION_STRATEGY
+          value: "BULYAN"
+        - name: FL_HE_SIDECAR_URL
+          value: "http://he-sidecar.fl-namespace.svc.cluster.local:8001"
+        securityContext:
+          # Required capabilities to load Gramine Enclaves
+          privileged: true
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4"
+             # EPC: Enclave Page Cache (The secure encrypted RAM block required for SGX)
+            sgx.intel.com/epc: "4Gi"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+            sgx.intel.com/epc: "4Gi"
+        volumeMounts:
+        - name: dev-sgx
+          mountPath: /dev/sgx
+      # Mount the host's actual SGX device drivers into the container
+      volumes:
+      - name: dev-sgx
+        hostPath:
+          path: /dev/sgx
+          type: Directory

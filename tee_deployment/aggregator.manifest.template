@@ -1,0 +1,65 @@
+# ==============================================
+# Gramine Manifest Template for Java Aggregator
+# Defines the security boundaries, accessible memory, and files for the SGX enclave.
+# ==============================================
+
+libos.entrypoint = "{{ java_dir }}/bin/java"
+
+# Log level for Gramine (error, warn, debug, trace)
+loader.log_level = "{{ log_level }}"
+
+# Command line arguments passes to Java
+loader.argv = [
+    "{{ java_dir }}/bin/java",
+    "-Xmx4G", 
+    "-Xms4G",
+    "-jar", 
+    "/gramine_app/app.jar"
+]
+
+# Set environment variables from the host (Requires explicit trust)
+loader.env.LD_LIBRARY_PATH = "/lib:/usr/lib:{{ arch_libdir }}"
+loader.env.SPRING_DATASOURCE_URL = { passthrough = true }
+loader.env.SPRING_DATASOURCE_USERNAME = { passthrough = true }
+loader.env.SPRING_DATASOURCE_PASSWORD = { passthrough = true }
+loader.env.FL_HE_ENABLED = { passthrough = true }
+loader.env.FL_AGGREGATION_STRATEGY = { passthrough = true }
+
+# Allowed mount points (Only these files/directories are visible inside the enclave)
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir }}" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr/lib", uri = "file:/usr/lib" },
+  { path = "{{ java_dir }}", uri = "file:{{ java_dir }}" },
+  { path = "/gramine_app", uri = "file:/gramine_app" },
+  { path = "/tmp", type = "tmpfs" }, # Temporary in-memory filesystem 
+]
+
+# Provide networking access to the enclave for the Spring Boot server and HTTP calls
+sys.enable_sigterm_injection = true
+sys.allow_eventfd = true
+sys.insecure__allow_eventfd = true
+
+# ==============================================================
+# SGX specific configuration
+# ==============================================================
+# Required enclave size. 8G handles Spring Boot overhead + HE vectors.
+sgx.enclave_size = "8G"
+sgx.max_threads = 64
+
+# Files to securely measure (Hash checked cryptographically before execution)
+sgx.trusted_files = [
+  "file:{{ java_dir }}/",
+  "file:{{ gramine.libos }}",
+  "file:{{ gramine.runtimedir }}/",
+  "file:{{ arch_libdir }}/",
+  "file:/gramine_app/app.jar"
+]
+
+# Network is inherently untrusted, relying on HTTPS/gRPC TLS
+# Also we allow access to DNS resolution configs
+sgx.allowed_files = [
+  "file:/etc/nsswitch.conf",
+  "file:/etc/host.conf",
+  "file:/etc/resolv.conf",
+]

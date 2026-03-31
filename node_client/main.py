@@ -19,6 +19,7 @@ from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge, Counter
 import os
+import he_manager
 
 app = FastAPI()
 
@@ -54,6 +55,13 @@ JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
 ACTIVITY_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/activity"
 ACTIVITY_REPORT_BATCH_INTERVAL = int(os.getenv("ACTIVITY_REPORT_BATCH_INTERVAL", "100"))
+
+# Homomorphic Encryption Config
+HE_ENABLED = os.getenv("HE_ENABLED", "false").lower() == "true"
+he_context = None
+if HE_ENABLED:
+    print(f"[{NODE_ID}] Homomorphic Encryption is ENABLED. Generating TenSEAL CKKS context...")
+    he_context = he_manager.generate_context()
 
 def get_auth_headers():
     if JWT_TOKEN:
@@ -212,7 +220,18 @@ def fetch_global_model():
         metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
         request = federated_pb2.GlobalModelRequest(node_id=NODE_ID)
         response = stub.GetGlobalModel(request, metadata=metadata, timeout=15)
-        return response.current_round, list(response.global_weights)
+        
+        if response.he_enabled and response.encrypted_global_weights:
+            report_activity("DOWNLOADING", "Decrypting HE global model")
+            try:
+                decrypted_weights = he_manager.decrypt_weights(he_context, response.encrypted_global_weights)
+                return response.current_round, decrypted_weights
+            except Exception as e:
+                print(f"[{NODE_ID}] Failed to decrypt global model: {e}")
+                return response.current_round, []
+        else:
+            return response.current_round, list(response.global_weights)
+            
     except grpc.RpcError as e:
         if e.code() == grpc.StatusCode.UNAUTHENTICATED:
             print(f"[{NODE_ID}] Unauthorized! Invalid token for global model fetch.")
@@ -399,6 +418,20 @@ def train_and_send():
         else:
             trained_weights = trained_weights_list
 
+        # Homomorphic Encryption (encrypting the combined DP+updated weights)
+        encrypted_blob = b""
+        pub_ctx_blob = b""
+        
+        if HE_ENABLED:
+            print(f"[{NODE_ID}] Encrypting weights via TenSEAL CKKS...")
+            report_activity("ENCRYPTING", "Homomorphic encryption of weights")
+            try:
+                encrypted_blob, pub_ctx_blob = he_manager.encrypt_weights(he_context, trained_weights)
+            except Exception as e:
+                print(f"[{NODE_ID}] Failed to encrypt weights: {e}")
+                # Fallback to no HE if encryption crashes for some reason
+                pass
+                
         print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
         report_activity("UPLOADING", f"Sending weights (Loss: {avg_loss:.4f})")
         try:
@@ -406,15 +439,29 @@ def train_and_send():
             stub = federated_pb2_grpc.FederatedServiceStub(channel)
             metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
             
-            request = federated_pb2.WeightRequest(
-                node_id=NODE_ID,
-                weights=trained_weights,
-                loss=avg_loss,
-                dp_enabled=DP_ENABLED,
-                accuracy=true_accuracy,
-                round_number=current_round
-            )
-            response = stub.SubmitWeights(request, metadata=metadata, timeout=30)
+            if HE_ENABLED and encrypted_blob and pub_ctx_blob:
+                request = federated_pb2.WeightRequest(
+                    node_id=NODE_ID,
+                    loss=avg_loss,
+                    dp_enabled=DP_ENABLED,
+                    accuracy=true_accuracy,
+                    round_number=current_round,
+                    he_enabled=True,
+                    encrypted_weights=encrypted_blob,
+                    he_context_public=pub_ctx_blob
+                )
+            else:
+                request = federated_pb2.WeightRequest(
+                    node_id=NODE_ID,
+                    weights=trained_weights,
+                    loss=avg_loss,
+                    dp_enabled=DP_ENABLED,
+                    accuracy=true_accuracy,
+                    round_number=current_round,
+                    he_enabled=False
+                )
+                
+            response = stub.SubmitWeights(request, metadata=metadata, timeout=180)
             
             if response.status == "error":
                 print(f"[{NODE_ID}] Aggregator rejected weights: {response.message}")
@@ -450,6 +497,7 @@ def startup_event():
     print(f"Starting Federated Learning Node: {NODE_ID}")
     print(f"  Aggregator: {AGGREGATOR_BASE_URL}")
     print(f"  DP Enabled: {DP_ENABLED}")
+    print(f"  HE Enabled: {HE_ENABLED}")
     print(f"  FedProx μ: {FEDPROX_MU}")
     thread = threading.Thread(target=train_and_send, daemon=True)
     thread.start()

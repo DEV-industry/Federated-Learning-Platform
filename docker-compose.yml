@@ -87,6 +87,13 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-fl-models}
       - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=fluser
+      - SPRING_RABBITMQ_PASSWORD=flpass
+      - FL_AGGREGATION_STRATEGY=BULYAN
+      - FL_HE_ENABLED=true
+      - FL_HE_SIDECAR_URL=http://he-sidecar:8001
+      - FL_SECURITY_MALICIOUS_FRACTION=0.25
     depends_on:
       postgres:
         condition: service_healthy
@@ -120,6 +127,8 @@ services:
       - AGGREGATOR_GRPC_URL=aggregator:9090
       - NODE_ID=node-1
       - DP_ENABLED=true
+      - HE_ENABLED=true
+      - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
       - NODE_SECRET=${NODE_SECRET}
@@ -136,12 +145,40 @@ services:
       - AGGREGATOR_GRPC_URL=aggregator:9090
       - NODE_ID=node-2
       - DP_ENABLED=true
+      - HE_ENABLED=true
+      - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
       - NODE_SECRET=${NODE_SECRET}
     depends_on:
       aggregator:
         condition: service_healthy
+    networks:
+      - fl-network
+
+  node_client_3:
+    build: ./node_client
+    environment:
+      - AGGREGATOR_BASE_URL=http://aggregator:8080
+      - AGGREGATOR_GRPC_URL=aggregator:9090
+      - NODE_ID=node-3
+      - DP_ENABLED=true
+      - HE_ENABLED=true
+      - DATA_PARTITION_FRACTION=0.3
+      - DP_NOISE_MULTIPLIER=0.01
+      - FEDPROX_MU=${FEDPROX_MU}
+      - NODE_SECRET=${NODE_SECRET}
+    depends_on:
+      aggregator:
+        condition: service_healthy
+    networks:
+      - fl-network
+
+  he-sidecar:
+    build: ./he_sidecar
+    container_name: fl-he-sidecar
+    ports:
+      - "8001:8001"
     networks:
       - fl-network
 

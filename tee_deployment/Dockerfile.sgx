@@ -1,0 +1,44 @@
+# ==========================================
+# Dockerfile for Intel SGX via Gramine
+# Specifically tailored for the Java FL Aggregator
+# ==========================================
+FROM ubuntu:22.04
+
+# 1. Install dependencies and Gramine
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    software-properties-common \
+    openjdk-17-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget -qO - https://packages.gramineproject.io/gramine-keyring.gpg | apt-key add - \
+    && echo "deb https://packages.gramineproject.io/ focal main" > /etc/apt/sources.list.d/gramine.list \
+    && apt-get update \
+    && apt-get install -y gramine \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /gramine_app
+
+# 2. Copy compiled Java Application (Assume Maven build ran earlier)
+COPY target/aggregator-0.0.1-SNAPSHOT.jar app.jar
+
+# 3. Copy Gramine Manifest template and signing key 
+# (In production, the signing key must NEVER be in the image. It should be signed in a secure offline environment)
+COPY tee_deployment/aggregator.manifest.template .
+COPY tee_deployment/dummy_enclave.pem enclave.key
+
+# 4. Generate the Gramine manifest and sign the enclave
+RUN gramine-manifest -Dlog_level=error \
+    -Darch_libdir=/lib/x86_64-linux-gnu \
+    -Djava_dir=/usr/lib/jvm/java-17-openjdk-amd64 \
+    aggregator.manifest.template > aggregator.manifest
+
+RUN gramine-sgx-sign \
+    --key enclave.key \
+    --manifest aggregator.manifest \
+    --output aggregator.manifest.sgx
+
+# 5. Runtime execution entrypoint
+# The `gramine-sgx` command bootstraps the SGX enclave and executes the workload defined in the manifest.
+CMD ["gramine-sgx", "aggregator"]

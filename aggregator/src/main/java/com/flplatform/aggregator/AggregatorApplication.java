@@ -24,6 +24,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
+import java.util.Base64;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse.BodyHandlers;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @SpringBootApplication
 @RestController
@@ -50,6 +59,18 @@ public class AggregatorApplication {
     @Autowired
     private org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private BulyanAggregator bulyanAggregator;
+
+    @Value("${fl.aggregation.strategy:MULTI_KRUM}")
+    private String aggregationStrategy;
+
+    @Value("${fl.he.enabled:false}")
+    private boolean heEnabledConfig;
+
+    @Value("${fl.he.sidecar.url:http://he-sidecar:8001}")
+    private String heSidecarUrl;
+
     @Value("${fl.security.malicious-fraction:0.3}")
     private double maliciousFraction;
 
@@ -74,6 +95,11 @@ public class AggregatorApplication {
     private final Map<String, String> nodeSecurityStatus = new ConcurrentHashMap<>();
     private final Map<String, Integer> nodeRejectionCount = new ConcurrentHashMap<>();
     private final Map<String, Boolean> nodeDpStatus = new ConcurrentHashMap<>();
+
+    // HE Tracking
+    private final Map<String, byte[]> nodeEncryptedWeights = new ConcurrentHashMap<>();
+    private byte[] heContextPublic = null;
+    private byte[] heGlobalWeights = null;
 
     // === LIVE ACTIVITY TRACKING ===
     private final Map<String, Map<String, String>> nodeActivity = new ConcurrentHashMap<>();
@@ -109,9 +135,15 @@ public class AggregatorApplication {
                     this.currentRound = state.getCurrentRound();
                     if (state.getModelPath() != null && !state.getModelPath().isBlank()) {
                         byte[] blob = minioService.downloadWeights(state.getModelPath());
-                        this.globalWeights = deserializeWeights(blob);
-                        System.out.println("Restored global model from MinIO: " + state.getModelPath()
-                                + " (Round " + this.currentRound + ", " + this.globalWeights.size() + " parameters)");
+                        // If HE mode is enabled from config, we restore the blob directly as ciphertext
+                        if (this.heEnabledConfig) {
+                            this.heGlobalWeights = blob;
+                            System.out.println("Restored HE ciphertext from MinIO: " + state.getModelPath());
+                        } else {
+                            this.globalWeights = deserializeWeights(blob);
+                            System.out.println("Restored global model from MinIO: " + state.getModelPath()
+                                    + " (Round " + this.currentRound + ", " + this.globalWeights.size() + " parameters)");
+                        }
                     }
                 }
                 this.roundStartTime = LocalDateTime.now();
@@ -418,7 +450,7 @@ public class AggregatorApplication {
         }
     }
 
-    public synchronized boolean validateAndQueueWeights(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
+    public synchronized boolean validateAndQueueWeights(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, byte[] encryptedWeights, byte[] heContextPublic) {
 
         // Validate round
         if (roundNumber == null || roundNumber != currentRound) {
@@ -441,13 +473,27 @@ public class AggregatorApplication {
         System.out.println("Received weights from " + nodeId + " (sending to MinIO and RabbitMQ queue)");
 
         try {
-            byte[] data = this.serializeWeights(weights);
+            byte[] data;
+            if (heEnabled != null && heEnabled && encryptedWeights != null && heContextPublic != null) {
+                // Keep the HE context
+                this.heContextPublic = heContextPublic;
+                data = encryptedWeights;
+            } else {
+                data = this.serializeWeights(weights);
+            }
+            
             long timestamp = System.currentTimeMillis();
             String path = "client-models/round-" + currentRound + "/" + nodeId + "-" + timestamp + ".bin";
             minioService.uploadWeights(path, data);
+            
+            String heContextPath = null;
+            if (heEnabled != null && heEnabled) {
+                heContextPath = "context/round-" + currentRound + "/public.ctx";
+                minioService.uploadWeights(heContextPath, heContextPublic);
+            }
 
             ModelSubmissionMessage msg = new ModelSubmissionMessage(
-                    nodeId, path, loss, accuracy, dpEnabled, roundNumber);
+                    nodeId, path, loss, accuracy, dpEnabled, roundNumber, heEnabled, heContextPath);
             
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
             
@@ -466,14 +512,29 @@ public class AggregatorApplication {
         return globalWeights;
     }
 
-    public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber) {
+    public boolean isHeGlobalModelAvailable() {
+        return this.heEnabledConfig && this.heGlobalWeights != null;
+    }
+
+    public byte[] getHeGlobalWeights() {
+        return this.heGlobalWeights;
+    }
+
+    public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, byte[] encryptedBlob, String heContextPath) {
         if (roundNumber == null || roundNumber != currentRound) {
             System.out.println("Processing skipped for nodeId " + nodeId + ": outdated round (got " + roundNumber + ", expected " + currentRound + ")");
             return;
         }
 
         System.out.println("Processing submitted weights from queue for node: " + nodeId);
-        nodeWeights.put(nodeId, weights);
+        
+        if (heEnabled != null && heEnabled && encryptedBlob != null) {
+            nodeEncryptedWeights.put(nodeId, encryptedBlob);
+            nodeWeights.put(nodeId, new ArrayList<>()); // Placeholder to keep counting simple
+        } else {
+            nodeWeights.put(nodeId, weights);
+        }
+        
         if (loss != null) {
             nodeLosses.put(nodeId, loss);
         }
@@ -564,12 +625,24 @@ public class AggregatorApplication {
         int prevRoundParamCount = this.globalWeights != null ? this.globalWeights.size() : 0;
         int n = nodeWeights.size();
 
-        if (this.currentRound == 0 || prevRoundParamCount == 0) {
+        if (this.currentRound == 0 || prevRoundParamCount == 0 && !this.heEnabledConfig) {
             // First round: Acccept all natively
             for (Map.Entry<String, List<Double>> entry : nodeWeights.entrySet()) {
                 nodeSecurityStatus.put(entry.getKey(), "Accepted");
                 validWeights.add(entry.getValue());
             }
+        } else if (this.heEnabledConfig) {
+            // HE Mode: The aggregator CANNOT see raw weights to run Krum/Bulyan dist calculations.
+            // In a pure HE setup, anomaly detection must be done blindly (not implemented) or skipped.
+            // We blindly accept all encrypted blobs and forward to the sidecar.
+            for (Map.Entry<String, byte[]> entry : nodeEncryptedWeights.entrySet()) {
+                nodeSecurityStatus.put(entry.getKey(), "Accepted (HE Blind)");
+            }
+        } else if ("BULYAN".equalsIgnoreCase(this.aggregationStrategy)) {
+            // Bulyan Algorithm
+            int f = (int) Math.floor(n * this.maliciousFraction);
+            validWeights.add(new ArrayList<>()); // Placeholder to skip old check later
+            this.globalWeights = bulyanAggregator.aggregate(nodeWeights, f, nodeSecurityStatus, nodeRejectionCount);
         } else {
             // Multi-Krum logic
             int f = (int) Math.floor(n * this.maliciousFraction);
@@ -624,24 +697,70 @@ public class AggregatorApplication {
             }
         }
 
-        if (validWeights.isEmpty()) {
+        if (validWeights.isEmpty() && !this.heEnabledConfig && !"BULYAN".equalsIgnoreCase(this.aggregationStrategy)) {
             System.out.println("All nodes rejected in round " + (currentRound + 1) + ". Round skipped.");
             this.nodeWeights.clear();
+            this.nodeEncryptedWeights.clear();
             this.nodeLosses.clear();
             this.nodeAccuracies.clear();
             this.roundStartTime = LocalDateTime.now();
             return;
         }
 
-        int numParams = validWeights.get(0).size();
-        List<Double> newGlobalWeights = new ArrayList<>(numParams);
-
-        for (int i = 0; i < numParams; i++) {
-            double sum = 0.0;
-            for (List<Double> nodeWeight : validWeights) {
-                sum += nodeWeight.get(i);
+        if (this.heEnabledConfig) {
+            // Make HTTP call to HE Sidecar
+            try {
+                System.out.println("Delegating " + nodeEncryptedWeights.size() + " encrypted payloads to HE sidecar...");
+                List<String> b64Blobs = new ArrayList<>();
+                for (byte[] b : nodeEncryptedWeights.values()) {
+                    b64Blobs.add(Base64.getEncoder().encodeToString(b));
+                }
+                
+                Map<String, Object> reqBody = new HashMap<>();
+                reqBody.put("pub_ctx", Base64.getEncoder().encodeToString(this.heContextPublic));
+                reqBody.put("encrypted_blobs", b64Blobs);
+                
+                ObjectMapper mapper = new ObjectMapper();
+                String jsonBody = mapper.writeValueAsString(reqBody);
+                
+                HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(30))
+                    .build();
+                    
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(this.heSidecarUrl + "/aggregate"))
+                    .header("Content-Type", "application/json")
+                    .timeout(java.time.Duration.ofMinutes(10))
+                    .POST(BodyPublishers.ofString(jsonBody))
+                    .build();
+                    
+                HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
+                
+                if (response.statusCode() == 200) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> resBody = mapper.readValue(response.body(), Map.class);
+                    this.heGlobalWeights = Base64.getDecoder().decode(resBody.get("aggregated_blob"));
+                    System.out.println("Successfully received aggregated HE ciphertext from sidecar.");
+                } else {
+                    System.err.println("HE Sidecar failed with status " + response.statusCode() + ": " + response.body());
+                    throw new RuntimeException("HE aggregation failed.");
+                }
+            } catch (Exception e) {
+                System.err.println("Exception calling HE Sidecar: " + e.getMessage());
+                e.printStackTrace();
             }
-            newGlobalWeights.add(sum / validWeights.size());
+        } else if (!"BULYAN".equalsIgnoreCase(this.aggregationStrategy)) {
+            int numParams = validWeights.get(0).size();
+            List<Double> newGlobalWeights = new ArrayList<>(numParams);
+
+            for (int i = 0; i < numParams; i++) {
+                double sum = 0.0;
+                for (List<Double> nodeWeight : validWeights) {
+                    sum += nodeWeight.get(i);
+                }
+                newGlobalWeights.add(sum / validWeights.size());
+            }
+            this.globalWeights = newGlobalWeights;
         }
 
         double avgLoss = 0.0;
@@ -664,7 +783,6 @@ public class AggregatorApplication {
         }
 
         this.currentRound++;
-        this.globalWeights = newGlobalWeights;
 
         // Persist round to training_rounds table
         RoundEntity entity = new RoundEntity(currentRound, avgLoss, accuracy, LocalDateTime.now(), new HashMap<>(nodeSecurityStatus));
@@ -675,6 +793,7 @@ public class AggregatorApplication {
 
         // Clear in-memory round state
         this.nodeWeights.clear();
+        this.nodeEncryptedWeights.clear();
         this.nodeLosses.clear();
         this.nodeAccuracies.clear();
         this.nodeActivity.clear();
@@ -688,7 +807,13 @@ public class AggregatorApplication {
 
     private void persistGlobalModelState() {
         try {
-            byte[] blob = serializeWeights(this.globalWeights);
+            byte[] blob;
+            if (this.heEnabledConfig && this.heGlobalWeights != null) {
+                blob = this.heGlobalWeights;
+            } else {
+                blob = serializeWeights(this.globalWeights);
+            }
+            
             String objectName = "models/round-" + this.currentRound + ".bin";
             minioService.uploadWeights(objectName, blob);
             GlobalModelStateEntity stateEntity = new GlobalModelStateEntity(this.currentRound, objectName);
@@ -728,7 +853,10 @@ public class AggregatorApplication {
         minioService.deleteAllObjects();
         this.currentRound = 0;
         this.globalWeights.clear();
+        this.heGlobalWeights = null;
+        this.heContextPublic = null;
         this.nodeWeights.clear();
+        this.nodeEncryptedWeights.clear();
         this.nodeLosses.clear();
         this.nodeAccuracies.clear();
         this.nodeSecurityStatus.clear();
