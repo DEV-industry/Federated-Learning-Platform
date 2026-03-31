@@ -5,6 +5,12 @@ import { Terminal } from "lucide-react";
 export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const stripLeadingSymbols = (text: string) =>
+    text
+      .replace(/^\s+/, "")
+      // Keep alphanumeric message prefix and trim leading symbols/emoji.
+      .replace(/^[^A-Za-z0-9]+/, "");
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -20,15 +26,15 @@ export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
           <span className="text-sm font-semibold text-gray-800">Event Stream</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-semibold text-emerald-600">LIVE</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+          <span className="text-[10px] font-semibold text-gray-500">LIVE</span>
         </div>
       </div>
 
       {/* Body */}
       <div
         ref={scrollRef}
-        className="p-4 h-[280px] overflow-y-auto font-mono text-[12px] leading-[1.9] bg-gray-50/50"
+        className="custom-terminal-scroll p-4 h-[280px] overflow-y-auto font-mono text-[12px] leading-[1.9] bg-gray-50/50"
       >
         {eventLogs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -40,20 +46,21 @@ export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
             const isLatest = idx === eventLogs.length - 1;
             const match = log.match(/^\[([^\]]+)\]\s*(.*)/);
             const timestamp = match ? match[1] : "";
-            const message = match ? match[2] : log;
+            const rawMessage = match ? match[2] : log;
+            const message = stripLeadingSymbols(rawMessage);
 
             return (
               <div
                 key={idx}
                 className={`flex gap-3 py-0.5 rounded-md px-2 transition-all duration-300 ${
-                  isLatest ? "bg-blue-50/80" : "hover:bg-gray-100/60"
+                  isLatest ? "bg-gray-100/80" : "hover:bg-gray-100/60"
                 }`}
                 style={{
                   animation: isLatest ? "terminal-line 0.3s ease-out" : "none",
                 }}
               >
                 <span className="text-gray-400 flex-shrink-0 select-none tabular-nums">{timestamp}</span>
-                <span className={isLatest ? "text-gray-900 font-medium" : "text-gray-600"}>{message}</span>
+                <span className={isLatest ? "text-gray-800 font-medium" : "text-gray-600"}>{message}</span>
               </div>
             );
           })

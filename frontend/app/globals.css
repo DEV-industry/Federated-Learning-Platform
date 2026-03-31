@@ -25,14 +25,14 @@
   width: 6px;
 }
 .custom-terminal-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f3f4f6;
 }
 .custom-terminal-scroll::-webkit-scrollbar-thumb {
-  background: #1f2937;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 .custom-terminal-scroll::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: #94a3b8;
 }
 
 /* Terminal cursor blink */
