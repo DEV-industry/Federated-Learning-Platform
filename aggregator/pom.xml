@@ -108,12 +108,6 @@
             <artifactId>rabbitmq</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>net.devh</groupId>
-            <artifactId>grpc-spring-boot-starter-testing</artifactId>
-            <version>3.1.0.RELEASE</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
     <build>
         <extensions>
