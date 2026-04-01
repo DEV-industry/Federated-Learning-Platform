@@ -50,10 +50,6 @@ jobs:
       MINIO_SECRET_KEY: testsecret
       SPRING_RABBITMQ_USERNAME: testuser
       SPRING_RABBITMQ_PASSWORD: testpass
-    services:
-      docker:
-        image: docker:dind
-        options: --privileged
     steps:
       - uses: actions/checkout@v4
 

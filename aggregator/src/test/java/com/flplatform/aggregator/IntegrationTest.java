@@ -24,6 +24,8 @@ class IntegrationTest {
 
     private static final String TEST_JWT_SECRET = "test-jwt-secret-key-with-at-least-32-bytes";
     private static final String TEST_NODE_SECRET = "test-node-secret";
+    private static final String TEST_RABBIT_USER = "testuser";
+    private static final String TEST_RABBIT_PASSWORD = "testpass";
 
     // Konfiguracja kontenera PostgreSQL
     @Container
@@ -34,7 +36,8 @@ class IntegrationTest {
 
     // Konfiguracja kontenera RabbitMQ
     @Container
-    static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3-management-alpine");
+    static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3-management-alpine")
+            .withUser(TEST_RABBIT_USER, TEST_RABBIT_PASSWORD);
 
     // Konfiguracja kontenera MinIO
     @Container
@@ -52,6 +55,8 @@ class IntegrationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.rabbitmq.host", rabbitmq::getHost);
         registry.add("spring.rabbitmq.port", rabbitmq::getAmqpPort);
+        registry.add("spring.rabbitmq.username", () -> TEST_RABBIT_USER);
+        registry.add("spring.rabbitmq.password", () -> TEST_RABBIT_PASSWORD);
         registry.add("minio.url", () -> "http://" + minio.getHost() + ":" + minio.getMappedPort(9000));
         registry.add("minio.access-key", () -> TEST_MINIO_USER);
         registry.add("minio.secret-key", () -> TEST_MINIO_PASSWORD);
