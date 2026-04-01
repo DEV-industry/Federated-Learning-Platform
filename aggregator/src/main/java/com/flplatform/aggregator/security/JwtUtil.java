@@ -20,12 +20,19 @@ public class JwtUtil {
     private static final long EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
     public JwtUtil(@Value("${jwt.secret}") String secret) {
-        // Ensure the key is at least 256 bits for HS256
+        // Validate that the key is at least 256 bits for HS256
+        if (secret == null || secret.isEmpty()) {
+            throw new IllegalArgumentException(
+                "JWT_SECRET must not be empty. Received: null or empty string"
+            );
+        }
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
-            byte[] padded = new byte[32];
-            System.arraycopy(keyBytes, 0, padded, 0, keyBytes.length);
-            keyBytes = padded;
+            throw new IllegalArgumentException(
+                "JWT_SECRET must be at least 32 bytes (256 bits) for HS256 algorithm. " +
+                "Current length: " + keyBytes.length + " bytes. " +
+                "Please set a longer secret in the JWT_SECRET environment variable or configuration."
+            );
         }
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
