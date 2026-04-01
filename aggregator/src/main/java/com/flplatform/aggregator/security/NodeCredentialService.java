@@ -17,6 +17,7 @@ import java.util.Base64;
 public class NodeCredentialService {
 
     private static final String AUTH_MESSAGE_PREFIX = "node-auth:";
+    private static final String ROTATE_MESSAGE_PREFIX = "node-key-rotate:";
 
     private final RegisteredNodeRepository registeredNodeRepository;
 
@@ -46,6 +47,70 @@ public class NodeCredentialService {
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         node.setLastHeartbeat(LocalDateTime.now());
         return registeredNodeRepository.save(node);
+    }
+
+    @Transactional
+    public RegisteredNodeEntity rotateNodeKey(
+            String nodeId,
+            String hostname,
+            String currentPublicKeyBase64,
+            String currentSignatureBase64,
+            String newPublicKeyBase64,
+            String newSignatureBase64) {
+
+        String normalizedNodeId = requireText(nodeId, "nodeId");
+        String normalizedHostname = hostname == null || hostname.isBlank() ? "unknown" : hostname.trim();
+        String normalizedCurrentPublicKey = requireText(currentPublicKeyBase64, "currentPublicKey");
+        String normalizedCurrentSignature = requireText(currentSignatureBase64, "currentSignature");
+        String normalizedNewPublicKey = requireText(newPublicKeyBase64, "newPublicKey");
+        String normalizedNewSignature = requireText(newSignatureBase64, "newSignature");
+
+        RegisteredNodeEntity node = registeredNodeRepository.findByNodeId(normalizedNodeId)
+                .orElseThrow(() -> new SecurityException("nodeId is not registered"));
+
+        if (node.getPublicKey() == null || node.getPublicKey().isBlank()) {
+            throw new SecurityException("node does not have an active key bound");
+        }
+        if (!node.getPublicKey().equals(normalizedCurrentPublicKey)) {
+            throw new SecurityException("currentPublicKey does not match the registered node key");
+        }
+
+        PublicKey currentPublicKey = decodePublicKey(normalizedCurrentPublicKey);
+        PublicKey newPublicKey = decodePublicKey(normalizedNewPublicKey);
+        String rotateMessage = ROTATE_MESSAGE_PREFIX + normalizedNodeId + ":" + normalizedNewPublicKey;
+
+        verifySignature(currentPublicKey, normalizedCurrentSignature, rotateMessage);
+        verifySignature(newPublicKey, normalizedNewSignature, rotateMessage);
+
+        node.setPublicKey(normalizedNewPublicKey);
+        node.setHostname(normalizedHostname);
+        node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
+        node.setLastHeartbeat(LocalDateTime.now());
+        node.setAuthVersion(node.getAuthVersion() + 1);
+        return registeredNodeRepository.save(node);
+    }
+
+    public boolean isJwtSessionValid(String nodeId, int authVersion) {
+        if (nodeId == null || nodeId.isBlank()) {
+            return false;
+        }
+        return registeredNodeRepository.findByNodeId(nodeId)
+                .filter(node -> node.getStatus() == RegisteredNodeEntity.NodeStatus.ACTIVE)
+                .filter(node -> node.getPublicKey() != null && !node.getPublicKey().isBlank())
+                .filter(node -> node.getAuthVersion() == authVersion)
+                .isPresent();
+    }
+
+    @Transactional
+    public int revokeAllNodeCredentials() {
+        int revokedCount = 0;
+        for (RegisteredNodeEntity node : registeredNodeRepository.findAll()) {
+            node.setStatus(RegisteredNodeEntity.NodeStatus.DISCONNECTED);
+            node.setAuthVersion(node.getAuthVersion() + 1);
+            registeredNodeRepository.save(node);
+            revokedCount++;
+        }
+        return revokedCount;
     }
 
     private String requireText(String value, String fieldName) {

@@ -15,11 +15,13 @@ import net.devh.boot.grpc.server.interceptor.GrpcGlobalServerInterceptor;
 public class GrpcAuthInterceptor implements ServerInterceptor {
 
     private final JwtUtil jwtUtil;
+    private final NodeCredentialService nodeCredentialService;
 
     public static final Context.Key<String> NODE_ID_CONTEXT_KEY = Context.key("nodeId");
 
-    public GrpcAuthInterceptor(JwtUtil jwtUtil) {
+    public GrpcAuthInterceptor(JwtUtil jwtUtil, NodeCredentialService nodeCredentialService) {
         this.jwtUtil = jwtUtil;
+        this.nodeCredentialService = nodeCredentialService;
     }
 
     @Override
@@ -32,10 +34,10 @@ public class GrpcAuthInterceptor implements ServerInterceptor {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            String nodeId = jwtUtil.validateTokenAndGetSubject(token);
+            JwtUtil.JwtPrincipal principal = jwtUtil.validateToken(token);
             
-            if (nodeId != null) {
-                Context ctx = Context.current().withValue(NODE_ID_CONTEXT_KEY, nodeId);
+            if (principal != null && nodeCredentialService.isJwtSessionValid(principal.nodeId(), principal.authVersion())) {
+                Context ctx = Context.current().withValue(NODE_ID_CONTEXT_KEY, principal.nodeId());
                 return Contexts.interceptCall(ctx, call, headers, next);
             }
         }

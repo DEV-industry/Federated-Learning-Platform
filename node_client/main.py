@@ -55,6 +55,7 @@ JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
 ACTIVITY_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/activity"
 ACTIVITY_REPORT_BATCH_INTERVAL = int(os.getenv("ACTIVITY_REPORT_BATCH_INTERVAL", "100"))
+AUTH_RECOVERY_LOCK = threading.Lock()
 
 NODE_PRIVATE_KEY = Ed25519PrivateKey.generate()
 NODE_PUBLIC_KEY_B64 = base64.b64encode(
@@ -65,6 +66,19 @@ def build_auth_signature():
     message = f"node-auth:{NODE_ID}".encode("utf-8")
     signature = NODE_PRIVATE_KEY.sign(message)
     return base64.b64encode(signature).decode("ascii")
+
+def recover_auth_session():
+    """Re-authenticate and re-register after token invalidation."""
+    with AUTH_RECOVERY_LOCK:
+        print(f"[{NODE_ID}] Attempting auth session recovery...")
+        if not authenticate(max_retries=6, retry_delay=2):
+            print(f"[{NODE_ID}] Auth recovery failed.")
+            return False
+        if not register_with_aggregator(max_retries=6, retry_delay=2):
+            print(f"[{NODE_ID}] Re-registration failed after auth recovery.")
+            return False
+        print(f"[{NODE_ID}] Auth session recovered successfully.")
+        return True
 
 # Homomorphic Encryption Config
 HE_ENABLED = os.getenv("HE_ENABLED", "false").lower() == "true"
@@ -208,6 +222,8 @@ def heartbeat_loop():
             response = requests.post(HEARTBEAT_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5)
             if response.status_code != 200:
                 print(f"[{NODE_ID}] Heartbeat failed (HTTP {response.status_code})")
+                if response.status_code == 401:
+                    recover_auth_session()
         except Exception as e:
             print(f"[{NODE_ID}] Heartbeat error: {e}")
         
@@ -247,6 +263,7 @@ def fetch_global_model():
     except grpc.RpcError as e:
         if e.code() == grpc.StatusCode.UNAUTHENTICATED:
             print(f"[{NODE_ID}] Unauthorized! Invalid token for global model fetch.")
+            recover_auth_session()
         else:
             print(f"[{NODE_ID}] gRPC error fetching global model: {e.code()} - {e.details()}")
     except Exception as e:
@@ -484,7 +501,7 @@ def train_and_send():
         except grpc.RpcError as e:
             if e.code() == grpc.StatusCode.UNAUTHENTICATED:
                 print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")
-                register_with_aggregator(max_retries=5)
+                recover_auth_session()
             else:
                 print(f"[{NODE_ID}] Failed to send weights via gRPC: {e.code()} - {e.details()}")
         except Exception as e:

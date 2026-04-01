@@ -33,6 +33,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse.BodyHandlers;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.flplatform.aggregator.security.NodeCredentialService;
 
 @SpringBootApplication
 @RestController
@@ -61,6 +62,9 @@ public class AggregatorApplication {
 
     @Autowired
     private BulyanAggregator bulyanAggregator;
+
+    @Autowired
+    private NodeCredentialService nodeCredentialService;
 
     @Value("${fl.aggregation.strategy:MULTI_KRUM}")
     private String aggregationStrategy;
@@ -848,6 +852,7 @@ public class AggregatorApplication {
     @DeleteMapping("/training/reset")
     @Transactional
     public synchronized Map<String, Object> resetTraining() {
+        int revokedNodes = nodeCredentialService.revokeAllNodeCredentials();
         roundRepository.deleteAll();
         globalModelStateRepository.deleteAll();
         minioService.deleteAllObjects();
@@ -868,11 +873,14 @@ public class AggregatorApplication {
         }
         this.globalStage = "IDLE";
         this.roundStartTime = LocalDateTime.now();
-        // Note: registered nodes are NOT cleared — only training state
-        addEventLog("\uD83D\uDDD1\uFE0F System reset. All training data cleared.");
+        addEventLog("\uD83D\uDDD1\uFE0F System reset. All training data cleared and node sessions revoked.");
         System.out.println("Emergency Reset Completed. Database and MinIO cleared. State back to Round 0.");
         broadcastUpdate();
-        return Map.of("status", "success", "message", "Training reset to round 0.");
+        return Map.of(
+            "status", "success",
+                "message", "Training reset to round 0. Node sessions revoked.",
+            "revokedNodes", revokedNodes
+        );
     }
 
     // =========================================================================

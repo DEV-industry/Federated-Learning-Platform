@@ -28,6 +28,9 @@ public class RegisteredNodeEntity {
     @Column(length = 1024)
     private String publicKey;
 
+    @Column(nullable = false)
+    private int authVersion = 0;
+
     public enum NodeStatus {
         ACTIVE, STALE, DISCONNECTED
     }
@@ -50,10 +53,12 @@ public class RegisteredNodeEntity {
     public LocalDateTime getRegisteredAt() { return registeredAt; }
     public LocalDateTime getLastHeartbeat() { return lastHeartbeat; }
     public String getPublicKey() { return publicKey; }
+    public int getAuthVersion() { return authVersion; }
 
     // Setters
     public void setStatus(NodeStatus status) { this.status = status; }
     public void setLastHeartbeat(LocalDateTime lastHeartbeat) { this.lastHeartbeat = lastHeartbeat; }
     public void setHostname(String hostname) { this.hostname = hostname; }
     public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
+    public void setAuthVersion(int authVersion) { this.authVersion = authVersion; }
 }

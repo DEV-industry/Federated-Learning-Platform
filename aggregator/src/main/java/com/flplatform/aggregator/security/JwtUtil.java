@@ -14,6 +14,8 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
+    public record JwtPrincipal(String nodeId, int authVersion) {}
+
     private final SecretKey signingKey;
     private static final long EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -28,23 +30,29 @@ public class JwtUtil {
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(String nodeId) {
+    public String generateToken(String nodeId, int authVersion) {
         return Jwts.builder()
                 .subject(nodeId)
+                .claim("authVersion", authVersion)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
                 .signWith(signingKey)
                 .compact();
     }
 
-    public String validateTokenAndGetSubject(String token) {
+    public JwtPrincipal validateToken(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(signingKey)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            return claims.getSubject();
+            Object versionClaim = claims.get("authVersion");
+            int authVersion = 0;
+            if (versionClaim instanceof Number number) {
+                authVersion = number.intValue();
+            }
+            return new JwtPrincipal(claims.getSubject(), authVersion);
         } catch (Exception e) {
             return null;
         }

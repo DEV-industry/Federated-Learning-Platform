@@ -17,9 +17,11 @@ import java.util.Collections;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final NodeCredentialService nodeCredentialService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, NodeCredentialService nodeCredentialService) {
         this.jwtUtil = jwtUtil;
+        this.nodeCredentialService = nodeCredentialService;
     }
 
     @Override
@@ -31,11 +33,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            String subject = jwtUtil.validateTokenAndGetSubject(token);
+            JwtUtil.JwtPrincipal principal = jwtUtil.validateToken(token);
 
-            if (subject != null) {
+            if (principal != null && nodeCredentialService.isJwtSessionValid(principal.nodeId(), principal.authVersion())) {
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(subject, null, Collections.emptyList());
+                        new UsernamePasswordAuthenticationToken(principal.nodeId(), null, Collections.emptyList());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         }
