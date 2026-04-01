@@ -13,7 +13,7 @@ jobs:
     env:
       NODE_ID: test-node
       NODE_SECRET: dummy-secret-for-tests
-      AGGREGATOR_BASE_URL: http://localhost:8080
+      AGGREGATOR_BASE_URL: https://localhost:8080
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Java Tests (Aggregator)
     env:
-      JWT_SECRET: dummy-jwt-secret-for-tests-1234567890
+      JWT_SECRET: 12345678901234567890123456789012
       NODE_SECRET: dummy-secret-for-tests
       SPRING_DATASOURCE_USERNAME: testuser
       SPRING_DATASOURCE_PASSWORD: testpassword

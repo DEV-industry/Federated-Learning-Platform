@@ -59,7 +59,7 @@ class JwtUtilTest {
     @Test
     void shouldAccept32ByteSecret() {
         // when & then - should not throw
-        String thirtyTwoByteSecret = "twelve-byte-secret-key-for-jwt";
+        String thirtyTwoByteSecret = "12345678901234567890123456789012";
         assertDoesNotThrow(() -> new JwtUtil(thirtyTwoByteSecret),
                 "Should accept 32-byte secret");
     }

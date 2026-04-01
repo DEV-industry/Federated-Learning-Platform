@@ -132,17 +132,21 @@ public class NodeCredentialService {
 
     private void verifySignature(PublicKey publicKey, String signatureBase64, String message) {
         try {
+            byte[] signatureBytes = Base64.getDecoder().decode(signatureBase64);
+
             Signature signature = Signature.getInstance("Ed25519");
             signature.initVerify(publicKey);
             signature.update(message.getBytes(StandardCharsets.UTF_8));
-            byte[] signatureBytes = Base64.getDecoder().decode(signatureBase64);
+
             if (!signature.verify(signatureBytes)) {
                 throw new SecurityException("Invalid node signature");
             }
+        } catch (IllegalArgumentException e) {
+            throw new SecurityException("Invalid node signature", e);
         } catch (SecurityException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to verify node signature", e);
+            throw new SecurityException("Failed to verify node signature", e);
         }
     }
 }

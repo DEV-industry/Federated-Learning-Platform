@@ -63,6 +63,8 @@ class IntegrationTest {
         registry.add("jwt.secret", () -> TEST_JWT_SECRET);
         // Dynamiczny port gRPC (0 = losowy dostępny port)
         registry.add("grpc.server.port", () -> 0);
+        // TLS gRPC jest wymagany w runtime, ale wyłączony w testach integracyjnych.
+        registry.add("grpc.server.security.enabled", () -> false);
     }
 
     @Test
