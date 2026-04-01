@@ -49,7 +49,10 @@ if not NODE_ID:
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
 FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
-NODE_SECRET = os.getenv("NODE_SECRET", "def_node_secret")
+NODE_SECRET = os.getenv("NODE_SECRET")
+if not NODE_SECRET:
+    print("FATAL ERROR: NODE_SECRET environment variable is missing. It must be provided.")
+    sys.exit(1)
 AUTH_URL = f"{AGGREGATOR_BASE_URL}/api/auth"
 JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))

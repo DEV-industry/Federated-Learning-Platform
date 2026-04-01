@@ -31,7 +31,10 @@ spec:
               name: fl-secrets
               key: rabbitmq-pass
         - name: RABBITMQ_ERLANG_COOKIE
-          value: "fl-platform-secret-cookie-123"
+          valueFrom:
+            secretKeyRef:
+              name: fl-secrets
+              key: rabbitmq-erlang-cookie
 ---
 apiVersion: v1
 kind: Service
