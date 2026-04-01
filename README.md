@@ -114,13 +114,21 @@ git clone https://github.com/DEV-industry/federated-learning-platform.git
 cd federated-learning-platform
 
 # Skopiowanie konfiguracji środowiskowej
-cp .env.example
+cp .env.example .env
 
 # Uruchomienie wszystkich serwisów
 docker-compose up --build
 ~~~
 
-Aplikacja kliencka będzie dostępna pod adresem: `http://localhost:3000`
+**Dostępne serwisy i porty:**
+* **Frontend (Aplikacja):** `http://localhost:3000`
+* **Aggregator (REST API):** `http://localhost:8080`
+* **Aggregator (gRPC):** `localhost:9090`
+* **Grafana (Monitoring):** `http://localhost:3001`
+* **RabbitMQ (Panel UI):** `http://localhost:15672`
+* **MinIO (Konsola S3):** `http://localhost:9001`
+
+*(Uwaga: dokładne porty mogą się różnić w zależności od konfiguracji w pliku `docker-compose.yml`)*
 
 ### Opcja 2: Środowisko Produkcyjne (Kubernetes)
 Projekt zawiera komplet manifestów do wdrożenia na klaster K8s.
