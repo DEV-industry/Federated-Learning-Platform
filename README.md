@@ -1,17 +1,40 @@
-# Federated-Learning-Platform
-## Schemat przepływu danych (Data Flow Diagram)
-```mermaid
-graph TD
-    NC[Node Client - Python] -->|1. gRPC: Wysyłka wag + LDP| AGG[Aggregator API - Java]
-    AGG -->|2. Kolejkowanie wiadomości| RMQ[(RabbitMQ)]
-    RMQ -->|3. Konsumpcja asynchroniczna| CONS[Aggregation Consumer]
-    CONS <-->|4. REST: Dodawanie szyfrogramów| HE[HE Sidecar - FastAPI]
-    CONS -->|5. Zapis metadanych rundy| DB[(PostgreSQL)]
-    CONS -->|6. Zapis pliku modelu globalnego| MINIO[(MinIO Storage)]
-    CONS -->|7. Powiadomienie o nowej rundzie| WS[WebSockets]
-```
+# Federated Learning Platform
 
-## Diagram Architektury C4 (Poziom Kontenerów)
+![Java](https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+
+Zaawansowana platforma do rozproszonego uczenia maszynowego (Federated Learning) zbudowana z myślą o maksymalnej prywatności i bezpieczeństwie danych (Privacy-Preserving ML). System pozwala na trenowanie modeli sztucznej inteligencji na urządzeniach brzegowych bez przesyłania surowych danych do centralnego serwera.
+
+## Główne funkcje (Security-First)
+
+* **Szyfrowanie Homomorficzne (HE):** Operacje matematyczne (agregacja wag) wykonywane bezpośrednio na zaszyfrowanych danych z użyciem biblioteki TenSEAL.
+* **Lokalna Prywatność Różnicowa (LDP):** Ochrona przed wyciekiem cech poprzez automatyczne przycinanie gradientów (clipping) i dodawanie szumu Gaussa.
+* **Odporność Bizantyjska (Bulyan):** Zaawansowany algorytm agregacji odporny na zatrute dane i złośliwe węzły.
+* **Izolacja Sprzętowa (TEE):** Agregator uruchamiany w bezpiecznej enklawie procesora przy użyciu Intel SGX i Gramine.
+
+## Stack Technologiczny
+
+### Backend & Core
+* **Aggregator:** Java 17, Spring Boot, Spring Security (JWT)
+* **Komunikacja:** gRPC (binarna wymiana wag), WebSockets (real-time events)
+* **Infrastruktura:** RabbitMQ (asynchroniczne kolejkowanie), PostgreSQL (metadane), MinIO (magazyn modeli S3)
+
+### Client & ML
+* **Node Client:** Python, PyTorch, Torchvision
+* **HE Sidecar:** Python, FastAPI, TenSEAL (operacje kryptograficzne)
+
+### Frontend & DevOps
+* **WebApp:** Next.js 14 (App Router), TypeScript, Tailwind CSS
+* **Deployment:** Docker, Docker Compose, pełne manifesty Kubernetes (K8s)
+* **Monitoring:** Prometheus, Grafana (dedykowane dashboardy)
+
+---
+## Architektura Systemu (C4 - Poziom Kontenerów)
+
 ```mermaid
 graph LR
     subgraph Klienci
@@ -33,7 +56,51 @@ graph LR
     FE -->|REST / WebSockets| AGG
     NODE -->|gRPC / REST| AGG
     AGG <-->|REST| HE
+    
     AGG -->|JDBC| DB
     AGG -->|AMQP| RMQ
     AGG -->|S3 API| MINIO
 ```
+
+## Przepływ Danych i Trenowania (Cykl Rundy)
+```mermaid
+graph TD
+    NC[Node Client - Python] -->|1. gRPC: Wysyłka wag + LDP| AGG[Aggregator API - Java]
+    AGG -->|2. Kolejkowanie wiadomości| RMQ[(RabbitMQ)]
+    RMQ -->|3. Konsumpcja asynchroniczna| CONS[Aggregation Consumer]
+    CONS <-->|4. REST: Dodawanie szyfrogramów| HE[HE Sidecar - FastAPI]
+    CONS -->|5. Zapis metadanych rundy| DB[(PostgreSQL)]
+    CONS -->|6. Zapis pliku modelu globalnego| MINIO[(MinIO Storage)]
+    CONS -->|7. Powiadomienie o nowej rundzie| WS[WebSockets]
+```
+
+## Szybki Start
+### Opcja 1: Uruchomienie lokalne (Docker Compose)
+Najszybszy sposób na postawienie całego środowiska.
+```bash
+# Klonowanie repozytorium
+git clone https://github.com/DEV-industry/federated-learning-platform.git
+cd federated-learning-platform
+
+# Skopiowanie konfiguracji środowiskowej
+cp .env.example .env
+
+# Uruchomienie wszystkich serwisów
+docker-compose up --build
+```
+Aplikacja kliencka będzie dostępna pod adresem: `http://localhost:3000`
+
+### Opcja 2: Środowisko Produkcyjne (Kubernetes)
+Projekt zawiera komplet manifestów do wdrożenia na klaster K8s.
+```bash
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/
+```
+
+## Monitoring i CI/CD
+System eksportuje kluczowe metryki do systemu `Prometheus`. Wizualizacja odbywa się przez gotowe dashboardy w `Grafanie`, pozwalając na śledzenie:
+- Czasu trwania poszczególnych rund FL.
+- Spadku funkcji straty (Loss) i wzrostu dokładności (Accuracy) w czasie rzeczywistym.
+- Stanów poszczególnych węzłów.
+  
+Testy automatyczne i integracyjne są uruchamiane przez `GitHub Actions` przy każdym nowym commicie.
