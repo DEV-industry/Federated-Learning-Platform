@@ -11,11 +11,16 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     # WebSocket support for STOMP real-time updates
     nginx.ingress.kubernetes.io/websocket-services: fl-aggregator
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - fl.local
+      secretName: fl-ingress-tls
   rules:
     - host: fl.local
       http:
@@ -27,21 +32,21 @@ spec:
               service:
                 name: fl-aggregator
                 port:
-                  number: 8080
+                  number: 8443
           - path: /ws
             pathType: Prefix
             backend:
               service:
                 name: fl-aggregator
                 port:
-                  number: 8080
+                  number: 8443
           - path: /ws-sockjs
             pathType: Prefix
             backend:
               service:
                 name: fl-aggregator
                 port:
-                  number: 8080
+                  number: 8443
           # All other traffic → Frontend (Next.js dashboard)
           - path: /
             pathType: Prefix

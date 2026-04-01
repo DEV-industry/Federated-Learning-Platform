@@ -12,11 +12,11 @@ spec:
   selector:
     app: fl-aggregator
   ports:
-    - port: 8080
-      targetPort: 8080
+    - port: 8443
+      targetPort: 8443
       protocol: TCP
       name: http
-    - port: 9090
-      targetPort: 9090
+    - port: 9443
+      targetPort: 9443
       protocol: TCP
       name: grpc

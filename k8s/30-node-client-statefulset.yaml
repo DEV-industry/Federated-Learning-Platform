@@ -27,8 +27,8 @@ spec:
             - sh
             - -c
             - |
-              echo "Waiting for Aggregator at fl-aggregator:8080..."
-              until wget -q --spider http://fl-aggregator.fl-platform.svc.cluster.local:8080/api/status; do
+              echo "Waiting for Aggregator at fl-aggregator:8443 over HTTPS..."
+              until wget --no-check-certificate -q --spider https://fl-aggregator.fl-platform.svc.cluster.local:8443/api/status; do
                 echo "Aggregator not ready. Retrying in 5s..."
                 sleep 5
               done
@@ -80,6 +80,20 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: AGGREGATOR_GRPC_URL
+            - name: TLS_VERIFY
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: TLS_VERIFY
+            - name: TLS_CA_CERT_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: TLS_CA_CERT_PATH
+          volumeMounts:
+            - name: aggregator-ca-cert
+              mountPath: /certs
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /health
@@ -101,3 +115,7 @@ spec:
             limits:
               memory: "2Gi"
               cpu: "1"
+      volumes:
+        - name: aggregator-ca-cert
+          secret:
+            secretName: fl-tls-certs

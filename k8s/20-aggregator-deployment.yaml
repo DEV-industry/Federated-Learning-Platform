@@ -94,9 +94,9 @@ spec:
           image: fl-aggregator:latest
           imagePullPolicy: Never
           ports:
-            - containerPort: 8080
+            - containerPort: 8443
               name: http
-            - containerPort: 9090
+            - containerPort: 9443
               name: grpc
           env:
             - name: POSTGRES_DB
@@ -118,6 +118,22 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: SPRING_JPA_HIBERNATE_DDL_AUTO
               value: "update"
+            - name: SERVER_PORT
+              value: "8443"
+            - name: SERVER_SSL_ENABLED
+              value: "true"
+            - name: SERVER_SSL_CERTIFICATE
+              value: "/certs/aggregator-server.crt"
+            - name: SERVER_SSL_CERTIFICATE_PRIVATE_KEY
+              value: "/certs/aggregator-server.key"
+            - name: GRPC_SERVER_PORT
+              value: "9443"
+            - name: GRPC_SERVER_SECURITY_ENABLED
+              value: "true"
+            - name: GRPC_SERVER_SECURITY_CERTIFICATE_CHAIN
+              value: "/certs/aggregator-server.crt"
+            - name: GRPC_SERVER_SECURITY_PRIVATE_KEY
+              value: "/certs/aggregator-server.key"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -146,10 +162,15 @@ spec:
           envFrom:
             - configMapRef:
                 name: fl-config
+          volumeMounts:
+            - name: aggregator-tls-certs
+              mountPath: /certs
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /api/status
-              port: 8080
+              port: 8443
+              scheme: HTTPS
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -157,7 +178,8 @@ spec:
           livenessProbe:
             httpGet:
               path: /api/status
-              port: 8080
+              port: 8443
+              scheme: HTTPS
             initialDelaySeconds: 45
             periodSeconds: 15
             timeoutSeconds: 5
@@ -169,4 +191,8 @@ spec:
             limits:
               memory: "1Gi"
               cpu: "1"
+      volumes:
+        - name: aggregator-tls-certs
+          secret:
+            secretName: fl-tls-certs
 

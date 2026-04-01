@@ -43,3 +43,9 @@ k8s/*secret*.yaml
 # Environment Variables
 .env
 
+# TLS certificates / private keys
+certs/*.key
+certs/*.crt
+certs/*.pem
+certs/*.csr
+

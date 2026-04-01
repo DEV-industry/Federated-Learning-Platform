@@ -24,9 +24,13 @@ spec:
             fieldRef:
               fieldPath: metadata.name
         - name: AGGREGATOR_BASE_URL
-          value: "http://aggregator:8080"
+          value: "https://aggregator:8443"
         - name: AGGREGATOR_GRPC_URL
-          value: "aggregator:9090"
+          value: "aggregator:9443"
+        - name: TLS_VERIFY
+          value: "true"
+        - name: TLS_CA_CERT_PATH
+          value: "/certs/ca.crt"
         - name: DP_ENABLED
           value: "true"
         - name: HE_ENABLED
@@ -47,3 +51,11 @@ spec:
           limits:
             cpu: "2"
             memory: "4Gi"
+        volumeMounts:
+        - name: aggregator-ca-cert
+          mountPath: /certs
+          readOnly: true
+      volumes:
+      - name: aggregator-ca-cert
+        secret:
+          secretName: fl-tls-certs

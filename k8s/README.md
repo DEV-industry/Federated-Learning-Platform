@@ -158,11 +158,11 @@ kubectl exec -it deploy/fl-node-client -n fl-platform -- \
 
 ```bash
 # Via port-forward
-kubectl port-forward svc/fl-aggregator 8080:8080 -n fl-platform &
-curl http://localhost:8080/api/status | python -m json.tool
+kubectl port-forward svc/fl-aggregator 8443:8443 -n fl-platform &
+curl -k https://localhost:8443/api/status | python -m json.tool
 
 # Check registered nodes
-curl http://localhost:8080/api/nodes | python -m json.tool
+curl -k https://localhost:8443/api/nodes | python -m json.tool
 ```
 
 ### View Training Logs
@@ -207,7 +207,7 @@ kubectl get pods -n fl-platform -w -l app=fl-node-client
 
 # Verify all new nodes auto-registered with the aggregator
 kubectl exec -it deploy/fl-aggregator -n fl-platform -- \
-  curl -s http://localhost:8080/api/nodes | python3 -m json.tool
+  curl -ks https://localhost:8443/api/nodes | python3 -m json.tool
 
 # Verify training continues uninterrupted
 kubectl logs -f deploy/fl-aggregator -n fl-platform --since=1m | grep "FedAvg"

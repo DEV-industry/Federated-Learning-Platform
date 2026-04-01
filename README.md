@@ -122,11 +122,13 @@ docker-compose up --build
 
 **Dostępne serwisy i porty:**
 * **Frontend (Aplikacja):** `http://localhost:3000`
-* **Aggregator (REST API):** `http://localhost:8080`
-* **Aggregator (gRPC):** `localhost:9090`
+* **Aggregator (REST API over HTTPS):** `https://localhost:8443`
+* **Aggregator (gRPC over TLS):** `localhost:9443`
 * **Grafana (Monitoring):** `http://localhost:3001`
 * **RabbitMQ (Panel UI):** `http://localhost:15672`
 * **MinIO (Konsola S3):** `http://localhost:9001`
+
+Przed uruchomieniem środowiska wygeneruj certyfikaty TLS zgodnie z instrukcją w `certs/README.md`.
 
 *(Uwaga: dokładne porty mogą się różnić w zależności od konfiguracji w pliku `docker-compose.yml`)*
 

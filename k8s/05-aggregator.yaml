@@ -18,9 +18,9 @@ spec:
         image: fl-aggregator:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
+        - containerPort: 8443
           name: web
-        - containerPort: 9090
+        - containerPort: 9443
           name: grpc
         env:
         - name: SPRING_DATASOURCE_URL
@@ -35,6 +35,22 @@ spec:
             secretKeyRef:
               name: fl-secrets
               key: db-password
+        - name: SERVER_PORT
+          value: "8443"
+        - name: SERVER_SSL_ENABLED
+          value: "true"
+        - name: SERVER_SSL_CERTIFICATE
+          value: "/certs/aggregator-server.crt"
+        - name: SERVER_SSL_CERTIFICATE_PRIVATE_KEY
+          value: "/certs/aggregator-server.key"
+        - name: GRPC_SERVER_PORT
+          value: "9443"
+        - name: GRPC_SERVER_SECURITY_ENABLED
+          value: "true"
+        - name: GRPC_SERVER_SECURITY_CERTIFICATE_CHAIN
+          value: "/certs/aggregator-server.crt"
+        - name: GRPC_SERVER_SECURITY_PRIVATE_KEY
+          value: "/certs/aggregator-server.key"
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -76,6 +92,14 @@ spec:
           value: "http://he-sidecar:8001"
         - name: FL_SECURITY_MALICIOUS_FRACTION
           value: "0.25"
+        volumeMounts:
+        - name: aggregator-tls-certs
+          mountPath: /certs
+          readOnly: true
+      volumes:
+      - name: aggregator-tls-certs
+        secret:
+          secretName: fl-tls-certs
 ---
 apiVersion: v1
 kind: Service
@@ -84,9 +108,9 @@ metadata:
   namespace: fl-system
 spec:
   ports:
-  - port: 8080
+  - port: 8443
     name: web
-  - port: 9090
+  - port: 9443
     name: grpc
   selector:
     app: fl-aggregator

@@ -6,6 +6,7 @@ import sys
 import socket
 import random
 import base64
+from urllib.parse import urlparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,8 +36,47 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 # CONFIGURATION — K8s-native with Docker-compatible defaults
 # =========================================================================
 
-AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "http://aggregator:8080")
-AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_GRPC_URL", "aggregator:9090")
+AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "https://aggregator:8443")
+AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_GRPC_URL", "aggregator:9443")
+TLS_VERIFY = os.getenv("TLS_VERIFY", "true").lower() == "true"
+TLS_CA_CERT_PATH = os.getenv("TLS_CA_CERT_PATH", "")
+GRPC_SSL_TARGET_NAME_OVERRIDE = os.getenv("GRPC_SSL_TARGET_NAME_OVERRIDE", "")
+
+
+def _validate_transport_configuration():
+    parsed = urlparse(AGGREGATOR_BASE_URL)
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"}:
+        print(f"FATAL ERROR: Unsupported AGGREGATOR_BASE_URL scheme '{scheme}'. Use http or https.")
+        sys.exit(1)
+
+    if scheme != "https":
+        print("FATAL ERROR: AGGREGATOR_BASE_URL must use https://")
+        sys.exit(1)
+
+
+def _build_requests_verify_arg():
+    if not TLS_VERIFY:
+        return False
+    if TLS_CA_CERT_PATH:
+        return TLS_CA_CERT_PATH
+    return True
+
+
+def _build_grpc_channel():
+    root_certificates = None
+    if TLS_CA_CERT_PATH:
+        with open(TLS_CA_CERT_PATH, "rb") as cert_file:
+            root_certificates = cert_file.read()
+    credentials = grpc.ssl_channel_credentials(root_certificates=root_certificates)
+    options = []
+    if GRPC_SSL_TARGET_NAME_OVERRIDE:
+        options.append(("grpc.ssl_target_name_override", GRPC_SSL_TARGET_NAME_OVERRIDE))
+    return grpc.secure_channel(AGGREGATOR_GRPC_URL, credentials, options=options)
+
+
+_validate_transport_configuration()
+REQUESTS_VERIFY_ARG = _build_requests_verify_arg()
 REGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/register"
 HEARTBEAT_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/heartbeat"
 UNREGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/unregister"
@@ -105,7 +145,7 @@ def authenticate(max_retries=60, retry_delay=5):
                 "hostname": hostname,
                 "publicKey": NODE_PUBLIC_KEY_B64,
                 "signature": build_auth_signature()
-            }, timeout=10)
+            }, timeout=10, verify=REQUESTS_VERIFY_ARG)
             if response.status_code == 200:
                 JWT_TOKEN = response.json().get("token")
                 print(f"[{NODE_ID}] Authenticated successfully. JWT obtained.")
@@ -132,7 +172,7 @@ def _graceful_shutdown(signum, frame):
     print(f"[{NODE_ID}] Received shutdown signal ({signum}). Unregistering...")
     _shutdown_flag.set()
     try:
-        requests.post(UNREGISTER_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5)
+        requests.post(UNREGISTER_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5, verify=REQUESTS_VERIFY_ARG)
         print(f"[{NODE_ID}] Successfully unregistered from aggregator.")
     except Exception as e:
         print(f"[{NODE_ID}] Failed to unregister: {e}")
@@ -190,7 +230,7 @@ def register_with_aggregator(max_retries=30, retry_delay=5):
             response = requests.post(REGISTER_URL, headers=get_auth_headers(), json={
                 "nodeId": NODE_ID,
                 "hostname": hostname
-            }, timeout=10)
+            }, timeout=10, verify=REQUESTS_VERIFY_ARG)
             
             if response.status_code == 200:
                 data = response.json()
@@ -219,7 +259,7 @@ def heartbeat_loop():
     """Send periodic heartbeats to the aggregator."""
     while not _shutdown_flag.is_set():
         try:
-            response = requests.post(HEARTBEAT_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5)
+            response = requests.post(HEARTBEAT_URL, headers=get_auth_headers(), json={"nodeId": NODE_ID}, timeout=5, verify=REQUESTS_VERIFY_ARG)
             if response.status_code != 200:
                 print(f"[{NODE_ID}] Heartbeat failed (HTTP {response.status_code})")
                 if response.status_code == 401:
@@ -243,7 +283,7 @@ def fetch_global_model():
         return 0, []
         
     try:
-        channel = grpc.insecure_channel(AGGREGATOR_GRPC_URL)
+        channel = _build_grpc_channel()
         stub = federated_pb2_grpc.FederatedServiceStub(channel)
         metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
         request = federated_pb2.GlobalModelRequest(node_id=NODE_ID)
@@ -295,7 +335,7 @@ def report_activity(status, detail=""):
             "nodeId": NODE_ID,
             "status": status,
             "detail": detail
-        }, timeout=3)
+        }, timeout=3, verify=REQUESTS_VERIFY_ARG)
     except Exception:
         pass  # Non-critical, don't let reporting failures affect training
 
@@ -464,7 +504,7 @@ def train_and_send():
         print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
         report_activity("UPLOADING", f"Sending weights (Loss: {avg_loss:.4f})")
         try:
-            channel = grpc.insecure_channel(AGGREGATOR_GRPC_URL)
+            channel = _build_grpc_channel()
             stub = federated_pb2_grpc.FederatedServiceStub(channel)
             metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
             

@@ -17,6 +17,6 @@ async def test_training_trigger(mocker, async_client):
 def test_grpc_client_mock(mocker):
     # Test weryfikujący np. połączenie gRPC z Aggregatorem bez prawdziwej sieci
     # Mock grpc channel & stub
-    mock_channel = mocker.patch("grpc.insecure_channel")
+    mock_channel = mocker.patch("main._build_grpc_channel")
 
     pass
