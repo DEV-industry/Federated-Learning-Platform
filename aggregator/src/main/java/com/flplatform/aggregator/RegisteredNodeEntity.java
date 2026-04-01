@@ -25,6 +25,9 @@ public class RegisteredNodeEntity {
     @Column(nullable = false)
     private LocalDateTime lastHeartbeat;
 
+    @Column(length = 1024)
+    private String publicKey;
+
     public enum NodeStatus {
         ACTIVE, STALE, DISCONNECTED
     }
@@ -46,9 +49,11 @@ public class RegisteredNodeEntity {
     public NodeStatus getStatus() { return status; }
     public LocalDateTime getRegisteredAt() { return registeredAt; }
     public LocalDateTime getLastHeartbeat() { return lastHeartbeat; }
+    public String getPublicKey() { return publicKey; }
 
     // Setters
     public void setStatus(NodeStatus status) { this.status = status; }
     public void setLastHeartbeat(LocalDateTime lastHeartbeat) { this.lastHeartbeat = lastHeartbeat; }
     public void setHostname(String hostname) { this.hostname = hostname; }
+    public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
 }

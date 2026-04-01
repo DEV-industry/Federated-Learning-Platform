@@ -27,11 +27,6 @@ spec:
           value: "http://aggregator:8080"
         - name: AGGREGATOR_GRPC_URL
           value: "aggregator:9090"
-        - name: NODE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: fl-secrets
-              key: node-secret
         - name: DP_ENABLED
           value: "true"
         - name: HE_ENABLED

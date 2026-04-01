@@ -40,11 +40,6 @@ spec:
             secretKeyRef:
               name: fl-secrets
               key: jwt-secret
-        - name: NODE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: fl-secrets
-              key: node-secret
         - name: MINIO_URL
           value: "http://minio:9000"
         - name: MINIO_ACCESS_KEY

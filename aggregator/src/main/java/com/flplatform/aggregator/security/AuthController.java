@@ -1,12 +1,8 @@
 package com.flplatform.aggregator.security;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @RestController
@@ -14,34 +10,19 @@ import java.util.Map;
 public class AuthController {
 
     private final JwtUtil jwtUtil;
+    private final NodeCredentialService nodeCredentialService;
 
-    @Value("${node.secret}")
-    private String expectedNodeSecret;
-
-    public AuthController(JwtUtil jwtUtil) {
+    public AuthController(JwtUtil jwtUtil, NodeCredentialService nodeCredentialService) {
         this.jwtUtil = jwtUtil;
-    }
-
-    private String calculateExpectedHash(String nodeId) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            SecretKeySpec secretKeySpec = new SecretKeySpec(expectedNodeSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-            mac.init(secretKeySpec);
-            byte[] hmacBytes = mac.doFinal(nodeId.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hmacBytes) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to calculate HMAC", e);
-        }
+        this.nodeCredentialService = nodeCredentialService;
     }
 
     @PostMapping("/auth")
     public ResponseEntity<Map<String, Object>> authenticate(@RequestBody Map<String, String> payload) {
         String nodeId = payload.get("nodeId");
-        String nodeSecret = payload.get("nodeSecret");
+        String hostname = payload.getOrDefault("hostname", "unknown");
+        String publicKey = payload.get("publicKey");
+        String signature = payload.get("signature");
 
         if (nodeId == null || nodeId.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -50,12 +31,31 @@ public class AuthController {
             ));
         }
 
-        String expectedHash = calculateExpectedHash(nodeId);
+        if (publicKey == null || publicKey.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "status", "error",
+                "message", "publicKey is required"
+            ));
+        }
 
-        if (nodeSecret == null || !nodeSecret.equals(expectedHash)) {
+        if (signature == null || signature.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "status", "error",
+                "message", "signature is required"
+            ));
+        }
+
+        try {
+            nodeCredentialService.authenticateNode(nodeId, hostname, publicKey, signature);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "status", "error",
+                "message", e.getMessage()
+            ));
+        } catch (SecurityException e) {
             return ResponseEntity.status(401).body(Map.of(
                 "status", "error",
-                "message", "Invalid credentials"
+                "message", e.getMessage()
             ));
         }
 

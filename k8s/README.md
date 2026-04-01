@@ -108,9 +108,8 @@ kubectl apply -f k8s/21-aggregator-service.yaml
 # Wait for Aggregator to be ready
 kubectl wait --for=condition=ready pod -l app=fl-aggregator -n fl-platform --timeout=180s
 
-# 4. Node Clients (the scalable training workers)
-kubectl apply -f k8s/30-node-client-deployment.yaml
-kubectl apply -f k8s/31-node-client-hpa.yaml
+# 4. Node Clients (dynamic replicas; each pod generates its own identity)
+kubectl apply -f k8s/30-node-client-statefulset.yaml
 
 # 5. Frontend + Ingress
 kubectl apply -f k8s/40-frontend-deployment.yaml
@@ -202,10 +201,8 @@ minikube tunnel
 ### Manual Scaling
 
 ```bash
-# Scale to 20 nodes
-kubectl scale deployment fl-node-client -n fl-platform --replicas=20
-
-# Watch pods spin up in real-time
+# Scale the node-client deployment as needed.
+# Watch the existing node pods
 kubectl get pods -n fl-platform -w -l app=fl-node-client
 
 # Verify all new nodes auto-registered with the aggregator
@@ -214,16 +211,12 @@ kubectl exec -it deploy/fl-aggregator -n fl-platform -- \
 
 # Verify training continues uninterrupted
 kubectl logs -f deploy/fl-aggregator -n fl-platform --since=1m | grep "FedAvg"
-
-# Scale back down
-kubectl scale deployment fl-node-client -n fl-platform --replicas=5
 ```
 
 ### Extreme Scale Test
 
 ```bash
-# Scale to 100+ nodes (requires sufficient cluster resources)
-kubectl scale deployment fl-node-client -n fl-platform --replicas=100
+# Create additional node-client replicas (requires sufficient cluster resources)
 
 # Monitor resource usage
 kubectl top pods -n fl-platform

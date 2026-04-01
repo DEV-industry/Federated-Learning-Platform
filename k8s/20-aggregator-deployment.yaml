@@ -123,11 +123,6 @@ spec:
                 secretKeyRef:
                   name: fl-secrets
                   key: JWT_SECRET
-            - name: NODE_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: fl-secrets
-                  key: NODE_SECRET
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

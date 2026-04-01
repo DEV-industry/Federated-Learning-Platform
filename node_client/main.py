@@ -5,8 +5,7 @@ import signal
 import sys
 import socket
 import random
-import hmac
-import hashlib
+import base64
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -20,6 +19,8 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge, Counter
 import os
 import he_manager
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 app = FastAPI()
 
@@ -49,15 +50,21 @@ if not NODE_ID:
 DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
 FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
-NODE_SECRET = os.getenv("NODE_SECRET")
-if not NODE_SECRET:
-    print("FATAL ERROR: NODE_SECRET environment variable is missing. It must be provided.")
-    sys.exit(1)
 AUTH_URL = f"{AGGREGATOR_BASE_URL}/api/auth"
 JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
 ACTIVITY_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/activity"
 ACTIVITY_REPORT_BATCH_INTERVAL = int(os.getenv("ACTIVITY_REPORT_BATCH_INTERVAL", "100"))
+
+NODE_PRIVATE_KEY = Ed25519PrivateKey.generate()
+NODE_PUBLIC_KEY_B64 = base64.b64encode(
+    NODE_PRIVATE_KEY.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+).decode("ascii")
+
+def build_auth_signature():
+    message = f"node-auth:{NODE_ID}".encode("utf-8")
+    signature = NODE_PRIVATE_KEY.sign(message)
+    return base64.b64encode(signature).decode("ascii")
 
 # Homomorphic Encryption Config
 HE_ENABLED = os.getenv("HE_ENABLED", "false").lower() == "true"
@@ -74,14 +81,16 @@ def get_auth_headers():
 def authenticate(max_retries=60, retry_delay=5):
     global JWT_TOKEN
     print(f"[{NODE_ID}] Authenticating with aggregator at {AUTH_URL}...")
+    hostname = socket.gethostname()
     for attempt in range(max_retries):
         if _shutdown_flag.is_set():
             return False
         try:
-            node_token = hmac.new(NODE_SECRET.encode(), NODE_ID.encode(), hashlib.sha256).hexdigest()
             response = requests.post(AUTH_URL, json={
                 "nodeId": NODE_ID,
-                "nodeSecret": node_token
+                "hostname": hostname,
+                "publicKey": NODE_PUBLIC_KEY_B64,
+                "signature": build_auth_signature()
             }, timeout=10)
             if response.status_code == 200:
                 JWT_TOKEN = response.json().get("token")

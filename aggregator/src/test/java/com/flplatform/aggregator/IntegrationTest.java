@@ -23,7 +23,6 @@ class IntegrationTest {
     private static final String TEST_MINIO_BUCKET = "fl-models-test";
 
     private static final String TEST_JWT_SECRET = "test-jwt-secret-key-with-at-least-32-bytes";
-    private static final String TEST_NODE_SECRET = "test-node-secret";
     private static final String TEST_RABBIT_USER = "testuser";
     private static final String TEST_RABBIT_PASSWORD = "testpass";
 
@@ -62,7 +61,6 @@ class IntegrationTest {
         registry.add("minio.secret-key", () -> TEST_MINIO_PASSWORD);
         registry.add("minio.bucket", () -> TEST_MINIO_BUCKET);
         registry.add("jwt.secret", () -> TEST_JWT_SECRET);
-        registry.add("node.secret", () -> TEST_NODE_SECRET);
         // Dynamiczny port gRPC (0 = losowy dostępny port)
         registry.add("grpc.server.port", () -> 0);
     }

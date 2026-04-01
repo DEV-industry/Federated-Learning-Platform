@@ -83,7 +83,6 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
       - JWT_SECRET=${JWT_SECRET}
-      - NODE_SECRET=${NODE_SECRET}
       - MINIO_URL=http://minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
@@ -133,7 +132,6 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
-      - NODE_SECRET=${NODE_SECRET}
     depends_on:
       aggregator:
         condition: service_healthy
@@ -151,7 +149,6 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
-      - NODE_SECRET=${NODE_SECRET}
     depends_on:
       aggregator:
         condition: service_healthy
@@ -169,7 +166,6 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
-      - NODE_SECRET=${NODE_SECRET}
     depends_on:
       aggregator:
         condition: service_healthy
