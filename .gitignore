@@ -48,4 +48,8 @@ certs/*.key
 certs/*.crt
 certs/*.pem
 certs/*.csr
+certs/*.srl
+certs/*.ext
+certs/*.p12
+certs/*.jks
 

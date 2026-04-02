@@ -97,8 +97,8 @@ services:
       - SERVER_SSL_CERTIFICATE_PRIVATE_KEY=/certs/aggregator-server.key
       - GRPC_SERVER_PORT=9443
       - GRPC_SERVER_SECURITY_ENABLED=true
-      - GRPC_SERVER_SECURITY_CERTIFICATE_CHAIN=/certs/aggregator-server.crt
-      - GRPC_SERVER_SECURITY_PRIVATE_KEY=/certs/aggregator-server.key
+      - GRPC_SERVER_SECURITY_CERTIFICATE_CHAIN=file:/certs/aggregator-server.crt
+      - GRPC_SERVER_SECURITY_PRIVATE_KEY=file:/certs/aggregator-server.key
       - FL_AGGREGATION_STRATEGY=BULYAN
       - FL_HE_ENABLED=true
       - FL_HE_SIDECAR_URL=http://he-sidecar:8001
