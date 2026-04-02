@@ -4,7 +4,7 @@ import { Target, TrendingUp, TrendingDown } from "lucide-react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:8443";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
