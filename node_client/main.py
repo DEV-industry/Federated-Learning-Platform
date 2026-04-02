@@ -69,7 +69,10 @@ def _build_grpc_channel():
         with open(TLS_CA_CERT_PATH, "rb") as cert_file:
             root_certificates = cert_file.read()
     credentials = grpc.ssl_channel_credentials(root_certificates=root_certificates)
-    options = []
+    options = [
+        ("grpc.max_send_message_length", 100 * 1024 * 1024),
+        ("grpc.max_receive_message_length", 100 * 1024 * 1024),
+    ]
     if GRPC_SSL_TARGET_NAME_OVERRIDE:
         options.append(("grpc.ssl_target_name_override", GRPC_SSL_TARGET_NAME_OVERRIDE))
     return grpc.secure_channel(AGGREGATOR_GRPC_URL, credentials, options=options)
@@ -503,49 +506,60 @@ def train_and_send():
                 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
         report_activity("UPLOADING", f"Sending weights (Loss: {avg_loss:.4f})")
-        try:
-            channel = _build_grpc_channel()
-            stub = federated_pb2_grpc.FederatedServiceStub(channel)
-            metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
-            
-            if HE_ENABLED and encrypted_blob and pub_ctx_blob:
-                request = federated_pb2.WeightRequest(
-                    node_id=NODE_ID,
-                    loss=avg_loss,
-                    dp_enabled=DP_ENABLED,
-                    accuracy=true_accuracy,
-                    round_number=current_round,
-                    he_enabled=True,
-                    encrypted_weights=encrypted_blob,
-                    he_context_public=pub_ctx_blob
-                )
-            else:
-                request = federated_pb2.WeightRequest(
-                    node_id=NODE_ID,
-                    weights=trained_weights,
-                    loss=avg_loss,
-                    dp_enabled=DP_ENABLED,
-                    accuracy=true_accuracy,
-                    round_number=current_round,
-                    he_enabled=False
-                )
-                
-            response = stub.SubmitWeights(request, metadata=metadata, timeout=180)
-            
-            if response.status == "error":
-                print(f"[{NODE_ID}] Aggregator rejected weights: {response.message}")
-                MODELS_REJECTED.labels(nodeId=NODE_ID).inc()
-            else:
-                print(f"[{NODE_ID}] Aggregator response: {response.message}")
-                
-        except grpc.RpcError as e:
-            if e.code() == grpc.StatusCode.UNAUTHENTICATED:
-                print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")
-                recover_auth_session()
-            else:
-                print(f"[{NODE_ID}] Failed to send weights via gRPC: {e.code()} - {e.details()}")
-        except Exception as e:
-            print(f"[{NODE_ID}] Failed to send weights: {e}")
+        submission_successful = False
+        for attempt in range(5):
+            try:
+                channel = _build_grpc_channel()
+                stub = federated_pb2_grpc.FederatedServiceStub(channel)
+                metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
+
+                if HE_ENABLED and encrypted_blob and pub_ctx_blob:
+                    request = federated_pb2.WeightRequest(
+                        node_id=NODE_ID,
+                        loss=avg_loss,
+                        dp_enabled=DP_ENABLED,
+                        accuracy=true_accuracy,
+                        round_number=current_round,
+                        he_enabled=True,
+                        encrypted_weights=encrypted_blob,
+                        he_context_public=pub_ctx_blob
+                    )
+                else:
+                    request = federated_pb2.WeightRequest(
+                        node_id=NODE_ID,
+                        weights=trained_weights,
+                        loss=avg_loss,
+                        dp_enabled=DP_ENABLED,
+                        accuracy=true_accuracy,
+                        round_number=current_round,
+                        he_enabled=False
+                    )
+
+                response = stub.SubmitWeights(request, metadata=metadata, timeout=180)
+
+                if response.status == "error":
+                    print(f"[{NODE_ID}] Aggregator rejected weights: {response.message}")
+                    MODELS_REJECTED.labels(nodeId=NODE_ID).inc()
+                else:
+                    print(f"[{NODE_ID}] Aggregator response: {response.message}")
+                    submission_successful = True
+                break
+            except grpc.RpcError as e:
+                if e.code() == grpc.StatusCode.UNAUTHENTICATED:
+                    print(f"[{NODE_ID}] Unauthorized! Invalid token for sending weights.")
+                    recover_auth_session()
+                    break
+                print(f"[{NODE_ID}] gRPC submit attempt {attempt + 1}/5 failed: {e.code()} - {e.details()}")
+                if attempt < 4:
+                    time.sleep(2)
+            except Exception as e:
+                print(f"[{NODE_ID}] Failed to send weights: {e}")
+                break
+
+        if not submission_successful:
+            print(f"[{NODE_ID}] Submission failed for round {current_round}; will retry this round on the next loop.")
+            time.sleep(5)
+            continue
             
         # 5. Track state and delay to observe the rounds progressing cleanly
         last_trained_round = current_round

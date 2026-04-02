@@ -807,6 +807,7 @@ public class AggregatorApplication {
         addEventLog("\u2705 Round " + currentRound + " completed! Accuracy: " + String.format("%.2f%%", accuracy * 100) + ", Loss: " + String.format("%.4f", avgLoss));
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound
                 + " (aggregated " + validWeights.size() + " nodes)");
+        broadcastUpdate();
     }
 
     private void persistGlobalModelState() {
