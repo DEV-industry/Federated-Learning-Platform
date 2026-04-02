@@ -16,6 +16,9 @@ import tenseal as ts
 from typing import List, Tuple
 
 
+CKKS_SLOT_COUNT = 4096
+
+
 # ---------------------------------------------------------------------------
 # Context generation
 # ---------------------------------------------------------------------------
@@ -52,7 +55,7 @@ def encrypt_weights(ctx: ts.Context, flat_weights: List[float]) -> Tuple[bytes, 
     Returns:
         (encrypted_blob, public_context_blob)
     """
-    slot_count = ctx.poly_modulus_degree // 2  # ~4096 for degree=8192
+    slot_count = CKKS_SLOT_COUNT
 
     # Chunk the weight vector to fit within CKKS slot limits
     chunks = [
