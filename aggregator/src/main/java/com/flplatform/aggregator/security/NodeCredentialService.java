@@ -38,13 +38,8 @@ public class NodeCredentialService {
         RegisteredNodeEntity node = registeredNodeRepository.findByNodeId(normalizedNodeId)
                 .orElseGet(() -> new RegisteredNodeEntity(normalizedNodeId, normalizedHostname));
 
-        boolean publicKeyChanged = node.getPublicKey() != null
-                && !node.getPublicKey().isBlank()
-                && !node.getPublicKey().equals(normalizedPublicKey);
-
-        if (publicKeyChanged) {
-            System.out.println("Node re-authenticated with a rotated public key: " + normalizedNodeId);
-            node.setAuthVersion(node.getAuthVersion() + 1);
+        if (node.getPublicKey() != null && !node.getPublicKey().isBlank() && !node.getPublicKey().equals(normalizedPublicKey)) {
+            throw new SecurityException("publicKey does not match the registered node key");
         }
 
         node.setHostname(normalizedHostname);
