@@ -142,6 +142,7 @@ services:
       - NODE_ID=node-1
       - DP_ENABLED=true
       - HE_ENABLED=true
+      - HE_SHARED_CONTEXT_FILE=/app/shared_he_context_private.b64
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
@@ -163,6 +164,7 @@ services:
       - NODE_ID=node-2
       - DP_ENABLED=true
       - HE_ENABLED=true
+      - HE_SHARED_CONTEXT_FILE=/app/shared_he_context_private.b64
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
@@ -184,6 +186,7 @@ services:
       - NODE_ID=node-3
       - DP_ENABLED=true
       - HE_ENABLED=true
+      - HE_SHARED_CONTEXT_FILE=/app/shared_he_context_private.b64
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}

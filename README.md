@@ -21,6 +21,8 @@ Zaawansowana platforma do rozproszonego uczenia maszynowego (Federated Learning)
 ## Główne funkcje (Security-First)
 
 * **Szyfrowanie Homomorficzne (HE):** Operacje matematyczne (agregacja wag) wykonywane bezpośrednio na zaszyfrowanych danych z użyciem biblioteki TenSEAL.
+
+HE to metoda szyfrowania, która pozwala serwerowi wykonywać sumowanie i uśrednianie bez odszyfrowywania wag po stronie serwera.
 * **Lokalna Prywatność Różnicowa (LDP):** Ochrona przed wyciekiem cech poprzez automatyczne przycinanie gradientów (clipping) i dodawanie szumu Gaussa.
 * **Odporność Bizantyjska (Bulyan):** Zaawansowany algorytm agregacji odporny na zatrute dane i złośliwe węzły.
 * **Izolacja Sprzętowa (TEE):** Agregator uruchamiany w bezpiecznej enklawie procesora przy użyciu Intel SGX i Gramine.
@@ -131,6 +133,28 @@ docker-compose up --build
 Przed uruchomieniem środowiska wygeneruj certyfikaty TLS zgodnie z instrukcją w `certs/README.md`.
 
 *(Uwaga: dokładne porty mogą się różnić w zależności od konfiguracji w pliku `docker-compose.yml`)*
+
+### Konfiguracja HE (wspólny kontekst)
+
+W trybie `HE_ENABLED=true` wszystkie węzły muszą używać tego samego kontekstu TenSEAL (wspólny klucz publiczny), inaczej agregacja szyfrogramów jest odrzucana.
+
+1. Wygeneruj wspólny kontekst (jednorazowo):
+
+~~~bash
+python node_client/generate_shared_he_context.py
+~~~
+
+2. W tym repozytorium shared context jest budowany do obrazu `node_client`, więc standardowe `docker compose up --build` oraz obraz używany w K8s dostają ten sam kontekst automatycznie.
+
+3. Jeśli chcesz nadpisać ten plik, ustaw w każdym `node_client` jedną z opcji:
+
+~~~bash
+HE_SHARED_CONTEXT_B64=<zawartosc_shared_he_context_private.b64>
+# lub
+HE_SHARED_CONTEXT_FILE=/run/secrets/shared_he_context_private.b64
+~~~
+
+4. Agregator automatycznie wymusza zgodność `he_context_public` dla wszystkich zgłoszeń i odrzuca niespójne payloady.
 
 ### Opcja 2: Środowisko Produkcyjne (Kubernetes)
 Projekt zawiera komplet manifestów do wdrożenia na klaster K8s.

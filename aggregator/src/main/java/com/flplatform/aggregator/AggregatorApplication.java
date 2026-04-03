@@ -25,7 +25,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 import java.util.Base64;
+import java.util.Arrays;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -478,9 +481,34 @@ public class AggregatorApplication {
 
         try {
             byte[] data;
-            if (heEnabled != null && heEnabled && encryptedWeights != null && heContextPublic != null) {
-                // Keep the HE context
-                this.heContextPublic = heContextPublic;
+
+            if (this.heEnabledConfig && (heEnabled == null || !heEnabled)) {
+                System.out.println("Rejected submission from " + nodeId + ": HE is required but submission is plaintext.");
+                return false;
+            }
+
+            if (!this.heEnabledConfig && heEnabled != null && heEnabled) {
+                System.out.println("Rejected submission from " + nodeId + ": HE payload provided while HE mode is disabled.");
+                return false;
+            }
+
+            if (heEnabled != null && heEnabled) {
+                if (encryptedWeights == null || heContextPublic == null) {
+                    System.out.println("Rejected HE submission from " + nodeId + ": missing encrypted payload or HE context.");
+                    return false;
+                }
+
+                if (this.heContextPublic == null) {
+                    this.heContextPublic = Arrays.copyOf(heContextPublic, heContextPublic.length);
+                    System.out.println("HE public context established from node " + nodeId
+                            + " (fingerprint=" + heContextFingerprint(this.heContextPublic) + ")");
+                } else if (!Arrays.equals(this.heContextPublic, heContextPublic)) {
+                    System.out.println("Rejected HE submission from " + nodeId
+                            + ": public context mismatch (expected=" + heContextFingerprint(this.heContextPublic)
+                            + ", got=" + heContextFingerprint(heContextPublic) + ")");
+                    return false;
+                }
+
                 data = encryptedWeights;
             } else {
                 data = this.serializeWeights(weights);
@@ -493,7 +521,7 @@ public class AggregatorApplication {
             String heContextPath = null;
             if (heEnabled != null && heEnabled) {
                 heContextPath = "context/round-" + currentRound + "/public.ctx";
-                minioService.uploadWeights(heContextPath, heContextPublic);
+                minioService.uploadWeights(heContextPath, this.heContextPublic);
             }
 
             ModelSubmissionMessage msg = new ModelSubmissionMessage(
@@ -505,6 +533,15 @@ public class AggregatorApplication {
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        }
+    }
+
+    private String heContextFingerprint(byte[] contextBytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return Base64.getEncoder().encodeToString(digest.digest(contextBytes));
+        } catch (NoSuchAlgorithmException e) {
+            return "sha256-unavailable";
         }
     }
     

@@ -14,6 +14,7 @@ Usage:
 
 import tenseal as ts
 from typing import List, Tuple
+import base64
 
 
 CKKS_SLOT_COUNT = 4096
@@ -39,6 +40,16 @@ def generate_context() -> ts.Context:
     ctx.global_scale = 2**40
     ctx.generate_galois_keys()
     return ctx
+
+
+def load_context_from_blob(blob: bytes) -> ts.Context:
+    """Load a full TenSEAL context from serialized bytes."""
+    return ts.context_from(blob)
+
+
+def load_context_from_base64(blob_b64: str) -> ts.Context:
+    """Load a full TenSEAL context from base64-encoded bytes."""
+    return load_context_from_blob(base64.b64decode(blob_b64))
 
 
 # ---------------------------------------------------------------------------

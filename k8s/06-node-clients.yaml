@@ -35,6 +35,8 @@ spec:
           value: "true"
         - name: HE_ENABLED
           value: "true"
+        - name: HE_SHARED_CONTEXT_FILE
+          value: "/app/shared_he_context_private.b64"
         - name: DP_NOISE_MULTIPLIER
           value: "0.01"
         - name: FEDPROX_MU

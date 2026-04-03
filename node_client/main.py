@@ -125,10 +125,29 @@ def recover_auth_session():
 
 # Homomorphic Encryption Config
 HE_ENABLED = os.getenv("HE_ENABLED", "false").lower() == "true"
+HE_SHARED_CONTEXT_B64 = os.getenv("HE_SHARED_CONTEXT_B64", "").strip()
+HE_SHARED_CONTEXT_FILE = os.getenv("HE_SHARED_CONTEXT_FILE", "/app/shared_he_context_private.b64").strip()
 he_context = None
 if HE_ENABLED:
-    print(f"[{NODE_ID}] Homomorphic Encryption is ENABLED. Generating TenSEAL CKKS context...")
-    he_context = he_manager.generate_context()
+    print(f"[{NODE_ID}] Homomorphic Encryption is ENABLED. Loading shared TenSEAL CKKS context...")
+    try:
+        if HE_SHARED_CONTEXT_B64:
+            he_context = he_manager.load_context_from_base64(HE_SHARED_CONTEXT_B64)
+        elif HE_SHARED_CONTEXT_FILE:
+            with open(HE_SHARED_CONTEXT_FILE, "rb") as context_file:
+                context_bytes = context_file.read()
+
+            # Accept either raw context bytes or a base64 file payload.
+            try:
+                he_context = he_manager.load_context_from_base64(context_bytes.decode("ascii").strip())
+            except Exception:
+                he_context = he_manager.load_context_from_blob(context_bytes)
+        else:
+            print(f"FATAL ERROR: [{NODE_ID}] HE_ENABLED=true requires HE_SHARED_CONTEXT_B64 or HE_SHARED_CONTEXT_FILE.")
+            sys.exit(1)
+    except Exception as e:
+        print(f"FATAL ERROR: [{NODE_ID}] Failed to load shared HE context: {e}")
+        sys.exit(1)
 
 def get_auth_headers():
     if JWT_TOKEN:

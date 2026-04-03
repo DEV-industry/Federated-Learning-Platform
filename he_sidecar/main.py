@@ -13,6 +13,47 @@ class AggregationRequest(BaseModel):
 class AggregationResponse(BaseModel):
     aggregated_blob: str
 
+
+def deserialize_chunks(blob_bytes: bytes, ctx: ts.Context):
+    """Deserialize chunked HE blob format: [num_chunks][len][chunk]..."""
+    if len(blob_bytes) < 4:
+        raise ValueError("Encrypted blob is too short")
+
+    offset = 0
+    num_chunks = int.from_bytes(blob_bytes[offset:offset + 4], byteorder='big')
+    offset += 4
+
+    chunks = []
+    for _ in range(num_chunks):
+        if offset + 4 > len(blob_bytes):
+            raise ValueError("Malformed encrypted blob: missing chunk length")
+
+        length = int.from_bytes(blob_bytes[offset:offset + 4], byteorder='big')
+        offset += 4
+
+        if length <= 0 or offset + length > len(blob_bytes):
+            raise ValueError("Malformed encrypted blob: invalid chunk size")
+
+        chunk_bytes = blob_bytes[offset:offset + length]
+        offset += length
+        chunks.append(ts.ckks_vector_from(ctx, chunk_bytes))
+
+    if offset != len(blob_bytes):
+        raise ValueError("Malformed encrypted blob: trailing bytes detected")
+
+    return chunks
+
+
+def serialize_chunks(chunks):
+    """Serialize chunks to: [num_chunks][len][chunk]..."""
+    result = bytearray()
+    result.extend(len(chunks).to_bytes(4, byteorder='big'))
+    for chunk in chunks:
+        chunk_bytes = chunk.serialize()
+        result.extend(len(chunk_bytes).to_bytes(4, byteorder='big'))
+        result.extend(chunk_bytes)
+    return bytes(result)
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
@@ -29,33 +70,6 @@ def aggregate_ciphertexts(request: AggregationRequest):
         ctx_bytes = base64.b64decode(request.pub_ctx)
         context = ts.context_from(ctx_bytes)
         
-        # 2. Deserialize all ciphertexts
-        # Since we chunked them in he_manager.py, each blob is actually a serialized list of chunks.
-        # However, due to time constraints in this demo, let's assume the sidecar knows how to handle the chunking struct.
-        # In he_manager.py we serialized them as [len(chunk1)] [chunk1_bytes] ...
-        
-        # Helper to deserialize the chunked format
-        def deserialize_chunks(blob_bytes, ctx):
-            chunks = []
-            offset = 0
-            while offset < len(blob_bytes):
-                # read 4 bytes for length
-                length = int.from_bytes(blob_bytes[offset:offset+4], byteorder='big')
-                offset += 4
-                chunk_bytes = blob_bytes[offset:offset+length]
-                offset += length
-                chunks.append(ts.ckks_vector_from(ctx, chunk_bytes))
-            return chunks
-
-        # Helper to serialize back to chunked format
-        def serialize_chunks(chunks):
-            result = bytearray()
-            for chunk in chunks:
-                chunk_bytes = chunk.serialize()
-                result.extend(len(chunk_bytes).to_bytes(4, byteorder='big'))
-                result.extend(chunk_bytes)
-            return bytes(result)
-
         # 3. Aggregate (sum them up)
         aggregated_chunks = None
         num_nodes = len(request.encrypted_blobs)
@@ -67,6 +81,8 @@ def aggregate_ciphertexts(request: AggregationRequest):
             if aggregated_chunks is None:
                 aggregated_chunks = node_chunks
             else:
+                if len(node_chunks) != len(aggregated_chunks):
+                    raise HTTPException(status_code=400, detail="Mismatched ciphertext chunk layout between nodes")
                 for c_idx in range(len(aggregated_chunks)):
                     aggregated_chunks[c_idx] = aggregated_chunks[c_idx] + node_chunks[c_idx]
                     
