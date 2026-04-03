@@ -58,7 +58,10 @@ public class FederatedGrpcService extends FederatedServiceGrpc.FederatedServiceI
     public void getGlobalModel(GlobalModelRequest request, StreamObserver<GlobalModelResponse> responseObserver) {
         try {
             GlobalModelResponse.Builder builder = GlobalModelResponse.newBuilder()
-                    .setCurrentRound(aggregatorContext.getCurrentRound());
+                    .setCurrentRound(aggregatorContext.getCurrentRound())
+                    .setDpEnabled(aggregatorContext.isCurrentDpEnabled())
+                    .setFedproxMu(aggregatorContext.getCurrentFedproxMu())
+                    .setDpNoiseMultiplier(aggregatorContext.getCurrentDpNoiseMultiplier());
                     
             if (aggregatorContext.isHeGlobalModelAvailable()) {
                 builder.setHeEnabled(true);

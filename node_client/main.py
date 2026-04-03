@@ -90,9 +90,9 @@ if not NODE_ID:
     print("FATAL ERROR: NODE_ID environment variable is missing. It must be provided.")
     sys.exit(1)
 
-DP_ENABLED = os.getenv("DP_ENABLED", "false").lower() == "true"
-DP_NOISE_MULTIPLIER = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
-FEDPROX_MU = float(os.getenv("FEDPROX_MU", "0.01"))
+DP_ENABLED_DEFAULT = os.getenv("DP_ENABLED", "false").lower() == "true"
+DP_NOISE_MULTIPLIER_DEFAULT = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
+FEDPROX_MU_DEFAULT = float(os.getenv("FEDPROX_MU", "0.01"))
 AUTH_URL = f"{AGGREGATOR_BASE_URL}/api/auth"
 JWT_TOKEN = None
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
@@ -302,7 +302,7 @@ def heartbeat_loop():
 def fetch_global_model():
     """Fetches the latest global model weights from the Aggregator via gRPC."""
     if not JWT_TOKEN:
-        return 0, []
+        return 0, [], default_round_hyperparams()
         
     try:
         channel = _build_grpc_channel()
@@ -310,17 +310,18 @@ def fetch_global_model():
         metadata = (('authorization', f'Bearer {JWT_TOKEN}'),)
         request = federated_pb2.GlobalModelRequest(node_id=NODE_ID)
         response = stub.GetGlobalModel(request, metadata=metadata, timeout=15)
+        round_hyperparams = parse_round_hyperparams(response)
         
         if response.he_enabled and response.encrypted_global_weights:
             report_activity("DOWNLOADING", "Decrypting HE global model")
             try:
                 decrypted_weights = he_manager.decrypt_weights(he_context, response.encrypted_global_weights)
-                return response.current_round, decrypted_weights
+                return response.current_round, decrypted_weights, round_hyperparams
             except Exception as e:
                 print(f"[{NODE_ID}] Failed to decrypt global model: {e}")
-                return response.current_round, []
+                return response.current_round, [], round_hyperparams
         else:
-            return response.current_round, list(response.global_weights)
+            return response.current_round, list(response.global_weights), round_hyperparams
             
     except grpc.RpcError as e:
         if e.code() == grpc.StatusCode.UNAUTHENTICATED:
@@ -330,7 +331,28 @@ def fetch_global_model():
             print(f"[{NODE_ID}] gRPC error fetching global model: {e.code()} - {e.details()}")
     except Exception as e:
         print(f"[{NODE_ID}] Error fetching global model: {e}")
-    return 0, []
+    return 0, [], default_round_hyperparams()
+
+
+def default_round_hyperparams():
+    return {
+        "dp_enabled": DP_ENABLED_DEFAULT,
+        "fedprox_mu": FEDPROX_MU_DEFAULT,
+        "dp_noise_multiplier": DP_NOISE_MULTIPLIER_DEFAULT,
+    }
+
+
+def parse_round_hyperparams(response):
+    # Backward compatibility: if server does not provide dynamic fields, keep env defaults.
+    has_dynamic_payload = response.fedprox_mu > 0 and response.dp_noise_multiplier > 0
+    fedprox_mu = response.fedprox_mu if has_dynamic_payload else FEDPROX_MU_DEFAULT
+    dp_noise_multiplier = response.dp_noise_multiplier if has_dynamic_payload else DP_NOISE_MULTIPLIER_DEFAULT
+    dp_enabled = response.dp_enabled if has_dynamic_payload else DP_ENABLED_DEFAULT
+    return {
+        "dp_enabled": dp_enabled,
+        "fedprox_mu": fedprox_mu,
+        "dp_noise_multiplier": dp_noise_multiplier,
+    }
 
 def evaluate_global_model(model):
     """Evaluates the global model on the full MNIST test set to determine true global accuracy."""
@@ -420,8 +442,15 @@ def train_and_send():
     while not _shutdown_flag.is_set():
         # 1. Fetch the latest global model
         report_activity("DOWNLOADING", "Fetching global model")
-        current_round, global_weights = fetch_global_model()
-        
+        current_round, global_weights, round_hparams = fetch_global_model()
+        round_dp_enabled = round_hparams["dp_enabled"]
+        round_fedprox_mu = round_hparams["fedprox_mu"]
+        round_dp_noise = round_hparams["dp_noise_multiplier"]
+        print(
+            f"[{NODE_ID}] Round {current_round} hyperparams from aggregator: "
+            f"dp_enabled={round_dp_enabled}, fedprox_mu={round_fedprox_mu:.6f}, dp_noise_multiplier={round_dp_noise:.6f}"
+        )
+
         if current_round < last_trained_round:
             print(f"[{NODE_ID}] Aggregator reset detected! Wiping local learning memory.")
             model = MNISTModel()
@@ -472,7 +501,7 @@ def train_and_send():
             proximal_term = 0.0
             for param, global_param in zip(model.parameters(), global_weights_copy):
                 proximal_term += ((param - global_param) ** 2).sum()
-            loss += (FEDPROX_MU / 2.0) * proximal_term
+            loss += (round_fedprox_mu / 2.0) * proximal_term
 
             loss.backward()
             optimizer.step()
@@ -489,7 +518,7 @@ def train_and_send():
         # 4. Flatten, compute update delta, apply DP, then send updated weights back to aggregator
         trained_weights_list = flatten_weights(model)
         
-        if DP_ENABLED:
+        if round_dp_enabled:
             t_trained = torch.tensor(trained_weights_list)
             t_start = torch.tensor(starting_weights)
             update_tensor = t_trained - t_start
@@ -499,13 +528,13 @@ def train_and_send():
             if l2_norm > max_norm:
                 update_tensor = update_tensor * (max_norm / l2_norm)
                 
-            noise = torch.normal(mean=0.0, std=DP_NOISE_MULTIPLIER * max_norm, size=update_tensor.size())
+            noise = torch.normal(mean=0.0, std=round_dp_noise * max_norm, size=update_tensor.size())
             noisy_update = update_tensor + noise
             
             final_weights_tensor = t_start + noisy_update
             trained_weights = final_weights_tensor.tolist()
             
-            print(f"[{NODE_ID}] Applied Local DP: clipped update L2 norm={l2_norm:.4f}, noise std={DP_NOISE_MULTIPLIER * max_norm}")
+            print(f"[{NODE_ID}] Applied Local DP: clipped update L2 norm={l2_norm:.4f}, noise std={round_dp_noise * max_norm}")
         else:
             trained_weights = trained_weights_list
 
@@ -536,7 +565,7 @@ def train_and_send():
                     request = federated_pb2.WeightRequest(
                         node_id=NODE_ID,
                         loss=avg_loss,
-                        dp_enabled=DP_ENABLED,
+                        dp_enabled=round_dp_enabled,
                         accuracy=true_accuracy,
                         round_number=current_round,
                         he_enabled=True,
@@ -548,7 +577,7 @@ def train_and_send():
                         node_id=NODE_ID,
                         weights=trained_weights,
                         loss=avg_loss,
-                        dp_enabled=DP_ENABLED,
+                        dp_enabled=round_dp_enabled,
                         accuracy=true_accuracy,
                         round_number=current_round,
                         he_enabled=False
@@ -598,9 +627,10 @@ def train_and_send():
 def startup_event():
     print(f"Starting Federated Learning Node: {NODE_ID}")
     print(f"  Aggregator: {AGGREGATOR_BASE_URL}")
-    print(f"  DP Enabled: {DP_ENABLED}")
+    print(f"  DP Enabled (default): {DP_ENABLED_DEFAULT}")
     print(f"  HE Enabled: {HE_ENABLED}")
-    print(f"  FedProx μ: {FEDPROX_MU}")
+    print(f"  FedProx μ (default): {FEDPROX_MU_DEFAULT}")
+    print(f"  DP noise (default): {DP_NOISE_MULTIPLIER_DEFAULT}")
     thread = threading.Thread(target=train_and_send, daemon=True)
     thread.start()
 

@@ -39,4 +39,7 @@ message GlobalModelResponse {
     // HE: aggregated ciphertext returned when HE mode is active
     bool he_enabled = 3;
     bytes encrypted_global_weights = 4;
+    bool dp_enabled = 5;
+    double fedprox_mu = 6;
+    double dp_noise_multiplier = 7;
 }

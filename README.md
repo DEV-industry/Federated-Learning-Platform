@@ -24,6 +24,7 @@ Zaawansowana platforma do rozproszonego uczenia maszynowego (Federated Learning)
 
 HE to metoda szyfrowania, która pozwala serwerowi wykonywać sumowanie i uśrednianie bez odszyfrowywania wag po stronie serwera.
 * **Lokalna Prywatność Różnicowa (LDP):** Ochrona przed wyciekiem cech poprzez automatyczne przycinanie gradientów (clipping) i dodawanie szumu Gaussa.
+* **Dynamiczne sterowanie hiperparametrami:** Agregator adaptacyjnie dostraja `FedProx μ` oraz `DP noise multiplier` na podstawie metryk kolejnych rund i rozsyła aktualne wartości do klientów przez gRPC.
 * **Odporność Bizantyjska (Bulyan):** Zaawansowany algorytm agregacji odporny na zatrute dane i złośliwe węzły.
 * **Izolacja Sprzętowa (TEE):** Agregator uruchamiany w bezpiecznej enklawie procesora przy użyciu Intel SGX i Gramine.
 

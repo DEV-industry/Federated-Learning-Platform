@@ -96,6 +96,33 @@ public class AggregatorApplication {
     @Value("${fl.heartbeat.stale-threshold-seconds:60}")
     private int heartbeatStaleThresholdSeconds;
 
+    @Value("${fl.dynamic-hparams.dp-enabled:true}")
+    private boolean dpEnabledInitial;
+
+    @Value("${fl.dynamic-hparams.fedprox-mu.initial:0.01}")
+    private double fedproxMuInitial;
+
+    @Value("${fl.dynamic-hparams.fedprox-mu.min:0.001}")
+    private double fedproxMuMin;
+
+    @Value("${fl.dynamic-hparams.fedprox-mu.max:0.05}")
+    private double fedproxMuMax;
+
+    @Value("${fl.dynamic-hparams.fedprox-mu.step:0.002}")
+    private double fedproxMuStep;
+
+    @Value("${fl.dynamic-hparams.dp-noise.initial:0.01}")
+    private double dpNoiseInitial;
+
+    @Value("${fl.dynamic-hparams.dp-noise.min:0.001}")
+    private double dpNoiseMin;
+
+    @Value("${fl.dynamic-hparams.dp-noise.max:0.1}")
+    private double dpNoiseMax;
+
+    @Value("${fl.dynamic-hparams.dp-noise.step:0.002}")
+    private double dpNoiseStep;
+
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeAccuracies = new ConcurrentHashMap<>();
@@ -107,6 +134,14 @@ public class AggregatorApplication {
     private final Map<String, byte[]> nodeEncryptedWeights = new ConcurrentHashMap<>();
     private byte[] heContextPublic = null;
     private byte[] heGlobalWeights = null;
+
+    // Dynamic hyperparameter state
+    private final DynamicHyperparameterController dynamicHyperparameterController = new DynamicHyperparameterController();
+    private volatile boolean currentDpEnabled;
+    private volatile double currentFedproxMu;
+    private volatile double currentDpNoiseMultiplier;
+    private volatile Double previousRoundLoss;
+    private volatile Double previousRoundAccuracy;
 
     // === LIVE ACTIVITY TRACKING ===
     private final Map<String, Map<String, String>> nodeActivity = new ConcurrentHashMap<>();
@@ -154,6 +189,11 @@ public class AggregatorApplication {
                     }
                 }
                 this.roundStartTime = LocalDateTime.now();
+                this.currentDpEnabled = this.dpEnabledInitial;
+                this.currentFedproxMu = this.fedproxMuInitial;
+                this.currentDpNoiseMultiplier = this.dpNoiseInitial;
+                this.previousRoundLoss = null;
+                this.previousRoundAccuracy = null;
                 return; // Everything successful
             } catch (Exception e) {
                 System.err.println("Database or MinIO not ready (attempt " + (i + 1) + "/" + maxRetries + "): " + e.getMessage());
@@ -561,6 +601,18 @@ public class AggregatorApplication {
         return this.heGlobalWeights;
     }
 
+    public boolean isCurrentDpEnabled() {
+        return this.currentDpEnabled;
+    }
+
+    public double getCurrentFedproxMu() {
+        return this.currentFedproxMu;
+    }
+
+    public double getCurrentDpNoiseMultiplier() {
+        return this.currentDpNoiseMultiplier;
+    }
+
     public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, byte[] encryptedBlob, String heContextPath) {
         if (roundNumber == null || roundNumber != currentRound) {
             System.out.println("Processing skipped for nodeId " + nodeId + ": outdated round (got " + roundNumber + ", expected " + currentRound + ")");
@@ -622,6 +674,24 @@ public class AggregatorApplication {
         if (config.containsKey("maliciousFraction")) {
             this.maliciousFraction = ((Number) config.get("maliciousFraction")).doubleValue();
             message.append("maliciousFraction=").append(this.maliciousFraction).append(" ");
+            updated = true;
+        }
+
+        if (config.containsKey("dpEnabled")) {
+            this.currentDpEnabled = (Boolean) config.get("dpEnabled");
+            message.append("dpEnabled=").append(this.currentDpEnabled).append(" ");
+            updated = true;
+        }
+
+        if (config.containsKey("fedproxMu")) {
+            this.currentFedproxMu = ((Number) config.get("fedproxMu")).doubleValue();
+            message.append("fedproxMu=").append(this.currentFedproxMu).append(" ");
+            updated = true;
+        }
+
+        if (config.containsKey("dpNoiseMultiplier")) {
+            this.currentDpNoiseMultiplier = ((Number) config.get("dpNoiseMultiplier")).doubleValue();
+            message.append("dpNoiseMultiplier=").append(this.currentDpNoiseMultiplier).append(" ");
             updated = true;
         }
 
@@ -823,6 +893,8 @@ public class AggregatorApplication {
             if (accuracy > 0.99) accuracy = 0.99;
         }
 
+        tuneRoundHyperparameters(avgLoss, accuracy);
+
         this.currentRound++;
 
         // Persist round to training_rounds table
@@ -845,6 +917,42 @@ public class AggregatorApplication {
         System.out.println("FedAvg completed successfully! Global model updated to round " + currentRound
                 + " (aggregated " + validWeights.size() + " nodes)");
         broadcastUpdate();
+    }
+
+    private void tuneRoundHyperparameters(double avgLoss, double accuracy) {
+        if (this.previousRoundLoss == null || this.previousRoundAccuracy == null) {
+            this.previousRoundLoss = avgLoss;
+            this.previousRoundAccuracy = accuracy;
+            System.out.println("Initialized dynamic hyperparameters: dpEnabled=" + this.currentDpEnabled
+                    + ", fedproxMu=" + this.currentFedproxMu
+                    + ", dpNoiseMultiplier=" + this.currentDpNoiseMultiplier);
+            return;
+        }
+
+        DynamicHyperparameterController.TunedHyperparameters tuned = dynamicHyperparameterController.tune(
+                this.currentFedproxMu,
+                this.currentDpNoiseMultiplier,
+                this.previousRoundLoss,
+                avgLoss,
+                this.previousRoundAccuracy,
+                accuracy,
+                this.fedproxMuMin,
+                this.fedproxMuMax,
+                this.fedproxMuStep,
+                this.dpNoiseMin,
+                this.dpNoiseMax,
+                this.dpNoiseStep
+        );
+
+        this.currentFedproxMu = tuned.fedproxMu();
+        this.currentDpNoiseMultiplier = tuned.dpNoiseMultiplier();
+        this.previousRoundLoss = avgLoss;
+        this.previousRoundAccuracy = accuracy;
+
+        System.out.println("Dynamic hyperparameters tuned: fedproxMu=" + this.currentFedproxMu
+                + ", dpNoiseMultiplier=" + this.currentDpNoiseMultiplier
+                + ", lossDelta=" + String.format("%.6f", tuned.lossDelta())
+                + ", accuracyDelta=" + String.format("%.6f", tuned.accuracyDelta()) + ")");
     }
 
     private void persistGlobalModelState() {
@@ -905,6 +1013,11 @@ public class AggregatorApplication {
         this.nodeSecurityStatus.clear();
         this.nodeRejectionCount.clear();
         this.nodeDpStatus.clear();
+        this.currentDpEnabled = this.dpEnabledInitial;
+        this.currentFedproxMu = this.fedproxMuInitial;
+        this.currentDpNoiseMultiplier = this.dpNoiseInitial;
+        this.previousRoundLoss = null;
+        this.previousRoundAccuracy = null;
         this.nodeActivity.clear();
         synchronized (eventLogs) {
             this.eventLogs.clear();
@@ -972,6 +1085,11 @@ public class AggregatorApplication {
         result.put("registeredNodes", activeRegistered);
         result.put("currentRound", currentRound);
         result.put("maliciousFraction", maliciousFraction);
+        result.put("dynamicHyperparameters", Map.of(
+            "dpEnabled", this.currentDpEnabled,
+            "fedproxMu", this.currentFedproxMu,
+            "dpNoiseMultiplier", this.currentDpNoiseMultiplier
+        ));
         result.put("nodeDetails", nodeDetails);
         result.put("globalStage", globalStage);
         result.put("nodeActivity", new HashMap<>(nodeActivity));
