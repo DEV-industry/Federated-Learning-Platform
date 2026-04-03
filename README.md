@@ -156,6 +156,23 @@ HE_SHARED_CONTEXT_FILE=/run/secrets/shared_he_context_private.b64
 
 4. Agregator automatycznie wymusza zgodność `he_context_public` dla wszystkich zgłoszeń i odrzuca niespójne payloady.
 
+Krótki przepływ HE w rundzie FL:
+
+~~~mermaid
+sequenceDiagram
+    participant N as Node Client
+    participant A as Aggregator
+    participant H as HE Sidecar
+
+    N->>N: Trening lokalny + szyfrowanie wag (shared context)
+    N->>A: SubmitWeights(encrypted_weights, he_context_public)
+    A->>A: Walidacja zgodności he_context_public
+    A->>H: POST /aggregate(pub_ctx, encrypted_blobs[])
+    H->>H: Suma i srednia na szyfrogramach (bez deszyfrowania)
+    H-->>A: aggregated_blob
+    A-->>N: Global model (ciphertext) dla kolejnej rundy
+~~~
+
 ### Opcja 2: Środowisko Produkcyjne (Kubernetes)
 Projekt zawiera komplet manifestów do wdrożenia na klaster K8s.
 
