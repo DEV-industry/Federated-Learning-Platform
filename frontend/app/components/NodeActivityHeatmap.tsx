@@ -1,17 +1,32 @@
 "use client";
 
 export default function NodeActivityHeatmap({ nodeDetails, history, currentRound }: { nodeDetails: any[]; history: any[]; currentRound?: number }) {
-  const days = nodeDetails.length > 0 ? nodeDetails.map((n: any) => n.nodeId.substring(0, 8)) : ["Node 1", "Node 2", "Node 3"];
-  const recentHistory = (history || []).slice(-6);
-  const historyOffset = Math.max(0, 6 - recentHistory.length);
-  const timeSlots = Array.from({ length: 6 }, (_, idx) => {
-    const historyIndex = idx - historyOffset;
-    if (historyIndex >= 0 && historyIndex < recentHistory.length) {
-      return `Round ${recentHistory[historyIndex].round}`;
-    }
-    return "—";
-  });
-  timeSlots.push(currentRound ? `Round ${currentRound}` : "Current");
+  const sortedHistory = [...(history || [])]
+    .filter((entry: any) => typeof entry?.round === "number")
+    .sort((a: any, b: any) => a.round - b.round);
+
+  const historyRounds = sortedHistory.map((entry: any) => entry.round);
+  const maxHistoryRound = historyRounds.length > 0 ? historyRounds[historyRounds.length - 1] : 0;
+  const shouldShowCurrent = typeof currentRound === "number" && currentRound > 0 && currentRound !== maxHistoryRound;
+
+  const columnRounds: number[] = shouldShowCurrent
+    ? [...historyRounds, currentRound as number]
+    : [...historyRounds];
+
+  const visibleColumns = columnRounds.length > 0 ? columnRounds : [0];
+
+  const historyByRound = new Map<number, any>(sortedHistory.map((entry: any) => [entry.round, entry]));
+
+  const knownNodes = nodeDetails.map((n: any) => n.nodeId);
+  if (knownNodes.length === 0) {
+    const historyNodes = new Set<string>();
+    sortedHistory.forEach((entry: any) => {
+      Object.keys(entry?.nodeStatuses || {}).forEach((nodeId) => historyNodes.add(nodeId));
+    });
+    knownNodes.push(...Array.from(historyNodes));
+  }
+
+  const days = knownNodes.length > 0 ? knownNodes : ["Node 1", "Node 2", "Node 3"];
 
   const getStatusColor = (status?: string) => {
     if (status === "Rejected") return "bg-argon-danger/60";
@@ -20,23 +35,31 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
   };
 
   const getColor = (row: number, col: number) => {
-    if (nodeDetails.length === 0) return "bg-argon-lighter";
-    const node = nodeDetails[row];
-    if (!node) return "bg-argon-lighter";
-    
-    if (col === 6) {
+    const nodeId = days[row];
+    const node = nodeDetails.find((n: any) => n.nodeId === nodeId);
+
+    const round = visibleColumns[col];
+    if (shouldShowCurrent && round === currentRound) {
+      if (!node) return "bg-argon-primary/40";
       if (node.status === "Rejected") return "bg-argon-danger/60";
       if (node.status === "Accepted") return "bg-argon-primary";
       return "bg-argon-primary/40";
     }
 
-    const historyIndex = col - historyOffset;
-    if (historyIndex >= 0 && historyIndex < recentHistory.length) {
-      const targetHistoryRecord = recentHistory[historyIndex];
-      const pastStatus = targetHistoryRecord?.nodeStatuses?.[node.nodeId];
-      return getStatusColor(pastStatus);
+    const targetHistoryRecord = historyByRound.get(round);
+    if (!targetHistoryRecord) return "bg-argon-lighter";
+
+    const statuses = targetHistoryRecord.nodeStatuses || {};
+    const directStatus = statuses[nodeId];
+    if (directStatus) return getStatusColor(directStatus);
+
+    if (nodeId.length > 8) {
+      const fallbackKey = Object.keys(statuses).find((key) => key.startsWith(nodeId) || nodeId.startsWith(key));
+      if (fallbackKey) {
+        return getStatusColor(statuses[fallbackKey]);
+      }
     }
-    
+
     return "bg-argon-lighter";
   };
 
@@ -53,22 +76,24 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
       </div>
       <div className="argon-card-body">
         <div className="overflow-x-auto">
-          <div className="min-w-[400px]">
+          <div className="min-w-max">
             {/* Column labels */}
             <div className="flex mb-2 ml-20">
-              {timeSlots.map((slot) => (
-                <div key={slot} className="flex-1 text-center text-[10px] text-argon-muted font-semibold">{slot}</div>
+              {visibleColumns.map((round, idx) => (
+                <div key={`${round}-${idx}`} className="w-16 shrink-0 text-center text-[10px] text-argon-muted font-semibold">
+                  {round === 0 ? "-" : `R${round}`}
+                </div>
               ))}
             </div>
             {/* Rows */}
             {days.map((day, rowIdx) => (
-              <div key={day} className="flex items-center mb-1.5">
-                <span className="w-20 text-xs text-argon-muted font-semibold truncate pr-2 text-right font-mono">{day}</span>
-                <div className="flex flex-1 gap-1">
-                  {timeSlots.map((_, colIdx) => (
+              <div key={`${day}-${rowIdx}`} className="flex items-center mb-1.5">
+                <span className="w-20 text-xs text-argon-muted font-semibold truncate pr-2 text-right font-mono" title={day}>{day}</span>
+                <div className="flex flex-1 gap-1 min-w-max">
+                  {visibleColumns.map((_, colIdx) => (
                     <div
                       key={colIdx}
-                      className={`flex-1 h-7 rounded-argon ${getColor(rowIdx, colIdx)} transition-colors`}
+                      className={`w-16 h-7 rounded-argon ${getColor(rowIdx, colIdx)} transition-colors`}
                     />
                   ))}
                 </div>

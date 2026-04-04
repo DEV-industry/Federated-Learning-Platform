@@ -18,6 +18,13 @@ import RoundStepper from "./components/RoundStepper";
 import EventTerminal from "./components/EventTerminal";
 import NetworkGraph from "./components/NetworkGraph";
 
+const normalizeHistory = (input: any): any[] => {
+  if (!Array.isArray(input)) return [];
+  return [...input]
+    .filter((item: any) => typeof item?.round === "number")
+    .sort((a: any, b: any) => a.round - b.round);
+};
+
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -44,8 +51,7 @@ export default function Home() {
       fetch(`${API_URL}/api/history`)
         .then((res) => res.json())
         .then((data) => {
-          const sortedData = data.sort((a: any, b: any) => a.round - b.round);
-          setHistory(sortedData);
+          setHistory(normalizeHistory(data));
         })
         .catch((err) => console.error(err));
     };
@@ -59,9 +65,10 @@ export default function Home() {
         client.subscribe("/topic/updates", (message) => {
           if (message.body) {
             const data = JSON.parse(message.body);
-            setStatus(data.status);
-            const sortedHistory = data.history.sort((a: any, b: any) => a.round - b.round);
-            setHistory(sortedHistory);
+            if (data.status) setStatus(data.status);
+            if (Array.isArray(data.history)) {
+              setHistory(normalizeHistory(data.history));
+            }
             if (data.eventLogs) setEventLogs(data.eventLogs);
             if (data.nodeActivity) setNodeActivity(data.nodeActivity);
             if (data.globalStage) setGlobalStage(data.globalStage);
