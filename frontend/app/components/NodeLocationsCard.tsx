@@ -12,28 +12,30 @@ export default function NodeLocationsCard({ nodeDetails }: { nodeDetails: any[] 
   ];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <h3 className="text-base font-semibold text-gray-800 mb-1">Node Locations</h3>
-      <div className="flex items-baseline gap-3 mb-1">
-        <span className="text-4xl font-bold text-gray-800">{totalNodes}</span>
-        <span className="flex items-center gap-0.5 text-xs font-semibold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">
-          <TrendingUp className="w-3 h-3" /> Active
-        </span>
+    <div className="argon-card overflow-hidden">
+      <div className="argon-card-header">
+        <h3 className="text-base font-bold text-argon-default mb-1">Node Locations</h3>
+        <div className="flex items-baseline gap-3">
+          <span className="text-3xl font-bold text-argon-default">{totalNodes}</span>
+          <span className="argon-badge argon-badge-success">
+            <TrendingUp className="w-3 h-3" /> Active
+          </span>
+        </div>
+        <p className="text-xs text-argon-muted mt-1">Connected clients by region</p>
       </div>
-      <p className="text-xs text-gray-400 mb-5">Connected clients by region</p>
 
-      <div className="space-y-4">
+      <div className="argon-card-body space-y-4">
         {locations.map((loc) => (
           <div key={loc.name} className="flex items-center gap-3">
             <span className="text-lg">{loc.flag}</span>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-gray-700">{loc.name}</span>
-                <span className="text-sm font-semibold text-gray-500">{loc.pct}%</span>
+                <span className="text-sm font-semibold text-argon-default">{loc.name}</span>
+                <span className="text-sm font-bold text-argon-muted">{loc.pct}%</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div className="w-full bg-argon-lighter rounded-full h-1">
                 <div
-                  className="bg-blue-500 h-1.5 rounded-full transition-all duration-700"
+                  className="bg-argon-primary h-1 rounded-full transition-all duration-700"
                   style={{ width: `${loc.pct}%` }}
                 />
               </div>

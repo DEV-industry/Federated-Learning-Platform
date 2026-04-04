@@ -21,18 +21,18 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
   const isIdle = globalStage === "IDLE";
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] mb-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="argon-card p-6 mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-gray-800">Round {currentRound} Pipeline</h3>
+          <h3 className="text-base font-bold text-argon-default">Round {currentRound} Pipeline</h3>
           {isIdle ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+            <span className="argon-badge bg-argon-lighter text-argon-muted">
+              <span className="w-1.5 h-1.5 rounded-full bg-argon-light" />
               Waiting for nodes
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="argon-badge argon-badge-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-argon-primary animate-pulse" />
               Processing
             </span>
           )}
@@ -52,12 +52,12 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                 {/* Circle */}
                 <div
                   className={`
-                    w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 relative
+                    w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 relative
                     ${isActive
-                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/25 scale-110"
+                      ? "bg-argon-primary text-white shadow-argon-primary scale-110"
                       : isCompleted
-                        ? "bg-emerald-500 text-white shadow-sm"
-                        : "bg-gray-100 text-gray-400"
+                        ? "bg-argon-success text-white shadow-argon-success"
+                        : "bg-argon-lighter text-argon-light"
                     }
                   `}
                 >
@@ -71,8 +71,8 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                 {/* Label */}
                 <span
                   className={`
-                    mt-2 text-[11px] font-semibold transition-colors duration-300
-                    ${isActive ? "text-blue-600" : isCompleted ? "text-emerald-600" : "text-gray-400"}
+                    mt-2 text-[0.6875rem] font-bold transition-colors duration-300
+                    ${isActive ? "text-argon-primary" : isCompleted ? "text-argon-success" : "text-argon-light"}
                   `}
                 >
                   {stage.label}
@@ -82,7 +82,7 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
                 <span
                   className={`
                     mt-0.5 text-[10px] transition-colors duration-300 text-center max-w-[100px]
-                    ${isActive ? "text-blue-400" : "text-gray-300"}
+                    ${isActive ? "text-argon-primary/60" : "text-argon-light/60"}
                   `}
                 >
                   {stage.description}
@@ -91,15 +91,14 @@ export default function RoundStepper({ globalStage, currentRound }: { globalStag
 
               {/* Connector line */}
               {idx < STAGES.length - 1 && (
-                <div className="flex-shrink-0 w-16 h-[3px] relative -mt-6 rounded-full bg-gray-200 overflow-hidden">
-                  {/* Filled portion */}
+                <div className="flex-shrink-0 w-16 h-[3px] relative -mt-6 rounded-full bg-argon-lighter overflow-hidden">
                   <div
                     className={`
                       absolute inset-y-0 left-0 rounded-full transition-all duration-700
                       ${isCompleted
-                        ? "w-full bg-emerald-400"
+                        ? "w-full bg-argon-success"
                         : isActive
-                          ? "bg-blue-400 animate-[stepper-fill_2s_ease-in-out_infinite]"
+                          ? "bg-argon-primary animate-[stepper-fill_2s_ease-in-out_infinite]"
                           : "w-0"
                       }
                     `}

@@ -8,7 +8,6 @@ export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
   const stripLeadingSymbols = (text: string) =>
     text
       .replace(/^\s+/, "")
-      // Keep alphanumeric message prefix and trim leading symbols/emoji.
       .replace(/^[^A-Za-z0-9]+/, "");
 
   useEffect(() => {
@@ -18,28 +17,30 @@ export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
   }, [eventLogs]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+    <div className="argon-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+      <div className="argon-card-header flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <Terminal className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-semibold text-gray-800">Event Stream</span>
+          <div className="w-8 h-8 rounded-argon bg-gradient-to-br from-argon-default to-[#344767] flex items-center justify-center">
+            <Terminal className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="text-base font-bold text-argon-default">Event Stream</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-          <span className="text-[10px] font-semibold text-gray-500">LIVE</span>
+          <span className="w-2 h-2 rounded-full bg-argon-success animate-pulse" />
+          <span className="text-[0.6875rem] font-bold text-argon-muted uppercase tracking-wider">Live</span>
         </div>
       </div>
 
       {/* Body */}
       <div
         ref={scrollRef}
-        className="custom-terminal-scroll p-4 h-[280px] overflow-y-auto font-mono text-[12px] leading-[1.9] bg-gray-50/50"
+        className="custom-terminal-scroll p-4 h-[280px] overflow-y-auto font-mono text-[12px] leading-[1.9] bg-argon-bg/30"
       >
         {eventLogs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+          <div className="flex flex-col items-center justify-center h-full text-argon-muted">
             <Terminal className="w-8 h-8 mb-2 opacity-30" />
-            <span className="text-[11px]">Waiting for events...</span>
+            <span className="text-[0.6875rem] font-semibold">Waiting for events...</span>
           </div>
         ) : (
           eventLogs.map((log, idx) => {
@@ -52,15 +53,15 @@ export default function EventTerminal({ eventLogs }: { eventLogs: string[] }) {
             return (
               <div
                 key={idx}
-                className={`flex gap-3 py-0.5 rounded-md px-2 transition-all duration-300 ${
-                  isLatest ? "bg-gray-100/80" : "hover:bg-gray-100/60"
+                className={`flex gap-3 py-0.5 rounded-argon px-2 transition-all duration-300 ${
+                  isLatest ? "bg-argon-primary/5" : "hover:bg-argon-lighter/60"
                 }`}
                 style={{
                   animation: isLatest ? "terminal-line 0.3s ease-out" : "none",
                 }}
               >
-                <span className="text-gray-400 flex-shrink-0 select-none tabular-nums">{timestamp}</span>
-                <span className={isLatest ? "text-gray-800 font-medium" : "text-gray-600"}>{message}</span>
+                <span className="text-argon-light flex-shrink-0 select-none tabular-nums">{timestamp}</span>
+                <span className={isLatest ? "text-argon-default font-semibold" : "text-argon-muted"}>{message}</span>
               </div>
             );
           })

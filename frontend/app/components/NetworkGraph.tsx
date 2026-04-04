@@ -9,11 +9,11 @@ interface NodeActivity {
 }
 
 const STATUS_COLORS: Record<string, { fill: string; glow: string; label: string }> = {
-  TRAINING: { fill: "#3b82f6", glow: "#3b82f630", label: "Training" },
+  TRAINING: { fill: "#5e72e4", glow: "#5e72e430", label: "Training" },
   DOWNLOADING: { fill: "#8b5cf6", glow: "#8b5cf630", label: "Downloading" },
-  UPLOADING: { fill: "#f59e0b", glow: "#f59e0b30", label: "Uploading" },
-  EVALUATING: { fill: "#10b981", glow: "#10b98130", label: "Evaluating" },
-  IDLE: { fill: "#9ca3af", glow: "#9ca3af20", label: "Idle" },
+  UPLOADING: { fill: "#fb6340", glow: "#fb634030", label: "Uploading" },
+  EVALUATING: { fill: "#2dce89", glow: "#2dce8930", label: "Evaluating" },
+  IDLE: { fill: "#8898aa", glow: "#8898aa20", label: "Idle" },
 };
 
 function getStatusColor(status: string) {
@@ -126,7 +126,7 @@ export default function NetworkGraph({
 
       const total = nodeIds.length || 1;
 
-      // Draw connection lines (dashed for idle, solid for active)
+      // Draw connection lines
       nodeIds.forEach((_, idx) => {
         const pos = getNodePos(idx, total);
         const act = nodeActivity[nodeIds[idx]];
@@ -138,7 +138,7 @@ export default function NetworkGraph({
         ctx.lineTo(pos.x, pos.y);
         if (status === "IDLE") {
           ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = "#e5e7eb";
+          ctx.strokeStyle = "#e9ecef";
           ctx.lineWidth = 1;
         } else {
           ctx.setLineDash([]);
@@ -169,7 +169,6 @@ export default function NetworkGraph({
         ctx.fillStyle = p.color;
         ctx.fill();
 
-        // Subtle glow
         const grad = ctx.createRadialGradient(x, y, 0, x, y, 10);
         grad.addColorStop(0, p.color + "40");
         grad.addColorStop(1, p.color + "00");
@@ -181,36 +180,32 @@ export default function NetworkGraph({
         return true;
       });
 
-      // Draw center hub (Aggregator)
+      // Draw center hub
       const hubPulse = Math.sin(timeRef.current * 3) * 0.08 + 1;
       const hubRadius = 26 * hubPulse;
       const isAggregating = globalStage === "AGGREGATING";
 
-      // Hub shadow
       const hubShadow = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, hubRadius * 2);
-      hubShadow.addColorStop(0, isAggregating ? "#8b5cf620" : "#3b82f615");
+      hubShadow.addColorStop(0, isAggregating ? "#5e72e420" : "#5e72e415");
       hubShadow.addColorStop(1, "#00000000");
       ctx.beginPath();
       ctx.arc(centerX, centerY, hubRadius * 2, 0, Math.PI * 2);
       ctx.fillStyle = hubShadow;
       ctx.fill();
 
-      // Hub circle
       ctx.beginPath();
       ctx.arc(centerX, centerY, hubRadius, 0, Math.PI * 2);
-      ctx.fillStyle = isAggregating ? "#7c3aed" : "#3b82f6";
+      ctx.fillStyle = isAggregating ? "#5e72e4" : "#5e72e4";
       ctx.fill();
 
-      // Hub border
       ctx.beginPath();
       ctx.arc(centerX, centerY, hubRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = isAggregating ? "#a78bfa" : "#60a5fa";
+      ctx.strokeStyle = "#7c8ce4";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Hub label
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 15px system-ui, -apple-system, sans-serif";
+      ctx.font = "bold 15px 'Open Sans', system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("AGG", centerX, centerY);
@@ -226,7 +221,6 @@ export default function NetworkGraph({
         const nodePulse = isActive ? Math.sin(timeRef.current * 4 + idx) * 0.08 + 1 : 1;
         const nodeRadius = 18 * nodePulse;
 
-        // Node shadow for active
         if (isActive) {
           const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, nodeRadius * 2);
           glow.addColorStop(0, sc.glow);
@@ -237,40 +231,35 @@ export default function NetworkGraph({
           ctx.fill();
         }
 
-        // Node circle
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
         if (isActive) {
           ctx.fillStyle = sc.fill;
         } else {
-          ctx.fillStyle = "#f3f4f6";
+          ctx.fillStyle = "#f7fafc";
         }
         ctx.fill();
 
-        // Node border
         ctx.beginPath();
         ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = isActive ? sc.fill : "#d1d5db";
+        ctx.strokeStyle = isActive ? sc.fill : "#e9ecef";
         ctx.lineWidth = isActive ? 2 : 1.5;
         ctx.stroke();
 
-        // Node label
         const shortId = nodeId.length > 6 ? nodeId.substring(nodeId.length - 4) : nodeId;
-        ctx.fillStyle = isActive ? "#ffffff" : "#6b7280";
-        ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+        ctx.fillStyle = isActive ? "#ffffff" : "#8898aa";
+        ctx.font = "bold 13px 'Open Sans', system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(shortId, pos.x, pos.y);
 
-        // Status label below
-        ctx.fillStyle = isActive ? sc.fill : "#9ca3af";
-        ctx.font = "11px system-ui, -apple-system, sans-serif";
+        ctx.fillStyle = isActive ? sc.fill : "#8898aa";
+        ctx.font = "11px 'Open Sans', system-ui, sans-serif";
         ctx.fillText(sc.label, pos.x, pos.y + nodeRadius + 16);
 
-        // Detail text
         if (act?.detail && isActive) {
-          ctx.fillStyle = "#9ca3af";
-          ctx.font = "10px system-ui, -apple-system, sans-serif";
+          ctx.fillStyle = "#8898aa";
+          ctx.font = "10px 'Open Sans', system-ui, sans-serif";
           const detailText = act.detail.length > 24 ? act.detail.substring(0, 24) + "…" : act.detail;
           ctx.fillText(detailText, pos.x, pos.y + nodeRadius + 30);
         }
@@ -284,21 +273,21 @@ export default function NetworkGraph({
   }, [dimensions, nodeIds, nodeActivity, globalStage]);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-800">Network Topology</h3>
+    <div className="argon-card overflow-hidden h-full flex flex-col">
+      <div className="argon-card-header flex items-center justify-between flex-shrink-0">
+        <h3 className="text-base font-bold text-argon-default">Network Topology</h3>
         <div className="flex items-center gap-3">
           {Object.entries(STATUS_COLORS).filter(([k]) => k !== "IDLE").map(([key, val]) => (
-            <span key={key} className="flex items-center gap-1.5 text-[10px] text-gray-500">
+            <span key={key} className="flex items-center gap-1.5 text-[10px] text-argon-muted font-semibold">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: val.fill }} />
               {val.label}
             </span>
           ))}
         </div>
       </div>
-      <div ref={containerRef} className="relative w-full bg-gray-50/30" style={{ height: "320px" }}>
+      <div ref={containerRef} className="relative w-full bg-argon-bg/30 flex-1 min-h-[320px]">
         {nodeIds.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm z-10">
+          <div className="absolute inset-0 flex items-center justify-center text-argon-muted text-sm z-10">
             <span>No active nodes — waiting for connections...</span>
           </div>
         )}

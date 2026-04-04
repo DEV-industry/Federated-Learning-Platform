@@ -14,21 +14,20 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
   timeSlots.push(currentRound ? `Round ${currentRound}` : "Current");
 
   const getStatusColor = (status?: string) => {
-    if (status === "Rejected") return "bg-red-300";
-    if (status === "Accepted") return "bg-blue-400";
-    return "bg-gray-100";
+    if (status === "Rejected") return "bg-argon-danger/60";
+    if (status === "Accepted") return "bg-argon-primary";
+    return "bg-argon-lighter";
   };
 
   const getColor = (row: number, col: number) => {
-    if (nodeDetails.length === 0) return "bg-gray-100";
+    if (nodeDetails.length === 0) return "bg-argon-lighter";
     const node = nodeDetails[row];
-    if (!node) return "bg-gray-100";
+    if (!node) return "bg-argon-lighter";
     
-    // col === 6 is the current round, meaning the latest active training details
     if (col === 6) {
-      if (node.status === "Rejected") return "bg-red-300";
-      if (node.status === "Accepted") return "bg-blue-400";
-      return "bg-blue-200";
+      if (node.status === "Rejected") return "bg-argon-danger/60";
+      if (node.status === "Accepted") return "bg-argon-primary";
+      return "bg-argon-primary/40";
     }
 
     const historyIndex = col - historyOffset;
@@ -38,43 +37,44 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
       return getStatusColor(pastStatus);
     }
     
-    // Fallback or "did not participate"
-    return "bg-gray-100";
+    return "bg-argon-lighter";
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-base font-semibold text-gray-800">Node Activity</h3>
-        <div className="flex items-center gap-3 text-[11px] text-gray-400">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-gray-100 rounded-sm inline-block" /> 0</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-200 rounded-sm inline-block" /></span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-300 rounded-sm inline-block" /></span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-400 rounded-sm inline-block" /> High</span>
+    <div className="argon-card overflow-hidden">
+      <div className="argon-card-header flex items-center justify-between">
+        <h3 className="text-base font-bold text-argon-default">Node Activity</h3>
+        <div className="flex items-center gap-3 text-[0.6875rem] text-argon-muted">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-argon-lighter rounded-sm inline-block" /> None</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-argon-primary/40 rounded-sm inline-block" /></span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-argon-primary/70 rounded-sm inline-block" /></span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 bg-argon-primary rounded-sm inline-block" /> High</span>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <div className="min-w-[400px]">
-          {/* Column labels */}
-          <div className="flex mb-2 ml-20">
-            {timeSlots.map((slot) => (
-              <div key={slot} className="flex-1 text-center text-[10px] text-gray-400 font-medium">{slot}</div>
+      <div className="argon-card-body">
+        <div className="overflow-x-auto">
+          <div className="min-w-[400px]">
+            {/* Column labels */}
+            <div className="flex mb-2 ml-20">
+              {timeSlots.map((slot) => (
+                <div key={slot} className="flex-1 text-center text-[10px] text-argon-muted font-semibold">{slot}</div>
+              ))}
+            </div>
+            {/* Rows */}
+            {days.map((day, rowIdx) => (
+              <div key={day} className="flex items-center mb-1.5">
+                <span className="w-20 text-xs text-argon-muted font-semibold truncate pr-2 text-right font-mono">{day}</span>
+                <div className="flex flex-1 gap-1">
+                  {timeSlots.map((_, colIdx) => (
+                    <div
+                      key={colIdx}
+                      className={`flex-1 h-7 rounded-argon ${getColor(rowIdx, colIdx)} transition-colors`}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-          {/* Rows */}
-          {days.map((day, rowIdx) => (
-            <div key={day} className="flex items-center mb-1.5">
-              <span className="w-20 text-xs text-gray-500 font-medium truncate pr-2 text-right font-mono">{day}</span>
-              <div className="flex flex-1 gap-1">
-                {timeSlots.map((_, colIdx) => (
-                  <div
-                    key={colIdx}
-                    className={`flex-1 h-7 rounded-md ${getColor(rowIdx, colIdx)} transition-colors`}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

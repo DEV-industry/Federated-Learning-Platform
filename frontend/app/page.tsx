@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Target, TrendingUp, TrendingDown } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Users } from "lucide-react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
@@ -129,19 +129,20 @@ export default function Home() {
   const lossTrend = currLoss <= prevLoss ? "down" : "up";
 
   const nodeDetails = status?.nodeDetails || [];
+  const totalNodes = status?.totalNodes || 0;
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] flex">
+    <div className="min-h-screen bg-argon-bg flex">
       <Sidebar activeItem="Dashboard" />
 
-      <main className="flex-1 ml-[250px] p-8 pb-20">
+      <main className="flex-1 ml-[282px] p-8 pb-20">
         <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
 
         {/* Online Status Pill */}
         <div className="flex items-center gap-6 mb-6">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-full shadow-sm">
-            <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${status ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" : "bg-red-400"}`} />
-            <span className="text-sm font-medium text-gray-600">{status ? "System Online" : "Connecting..."}</span>
+          <div className="flex items-center gap-2 argon-card px-4 py-2 rounded-full">
+            <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${status ? "bg-argon-success shadow-[0_0_6px_rgba(45,206,137,0.5)]" : "bg-argon-danger"}`} />
+            <span className="text-sm font-semibold text-argon-muted">{status ? "System Online" : "Connecting..."}</span>
           </div>
         </div>
 
@@ -154,18 +155,19 @@ export default function Home() {
           status={status}
         />
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        {/* 4-Column KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
           <MetricCard
-            title="Current Training Round"
+            title="Training Round"
             value={String(currentRound)}
-            subtitle={`${currentRound} / ${TARGET_ROUNDS} to convergence`}
+            subtitle={`${currentRound} / ${TARGET_ROUNDS} target`}
             icon={Target}
+            iconColor="primary"
           >
             <div className="mt-3">
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div className="w-full bg-argon-lighter rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-1000 ease-out"
+                  className="bg-gradient-to-r from-argon-primary to-[#825ee4] h-1.5 rounded-full transition-all duration-1000 ease-out"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
@@ -175,31 +177,45 @@ export default function Home() {
           <MetricCard
             title="Model Accuracy"
             value={latestAccuracy}
-            subtitle="Real-time evaluation"
+            subtitle="since last round"
             trend={accuracyTrend as "up" | "down"}
             trendValue={`${accuracyDelta}%`}
             icon={TrendingUp}
+            iconColor="success"
           />
 
           <MetricCard
             title="Training Loss"
             value={latestLoss}
-            subtitle="Latest average loss"
+            subtitle="latest average"
             trend={lossTrend as "up" | "down"}
             trendValue={lossDelta}
             icon={TrendingDown}
+            iconColor="warning"
+          />
+
+          <MetricCard
+            title="Active Nodes"
+            value={String(totalNodes)}
+            subtitle={`of ${status?.expectedNodes || "?"} expected`}
+            icon={Users}
+            iconColor="info"
           />
         </div>
 
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-          <NodeActivityHeatmap nodeDetails={nodeDetails} history={history} currentRound={currentRound} />
-          <AccuracyChart history={history} />
+        {/* Charts Row: Accuracy (left, larger) + Network Graph (right, hero) */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mb-6">
+          <div className="lg:col-span-3">
+            <AccuracyChart history={history} />
+          </div>
+          <div className="lg:col-span-2">
+            <NetworkGraph nodeActivity={nodeActivity} globalStage={globalStage} />
+          </div>
         </div>
 
-        {/* Network Graph + Event Terminal Row */}
+        {/* Heatmap + Event Terminal Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-          <NetworkGraph nodeActivity={nodeActivity} globalStage={globalStage} />
+          <NodeActivityHeatmap nodeDetails={nodeDetails} history={history} currentRound={currentRound} />
           <EventTerminal eventLogs={eventLogs} />
         </div>
 
@@ -207,7 +223,7 @@ export default function Home() {
         <RoundStepper globalStage={globalStage} currentRound={currentRound} />
 
         {/* Bottom Row: Table + Locations */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
             <NodeClientsTable nodeDetails={nodeDetails} nodeActivity={nodeActivity} />
           </div>

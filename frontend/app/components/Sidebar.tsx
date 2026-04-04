@@ -7,12 +7,17 @@ import {
 function NavItem({ icon: Icon, label, active }: { icon: any; label: string; active?: boolean }) {
   return (
     <button
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${active
-        ? "bg-blue-50 text-blue-600"
-        : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-argon text-[0.8125rem] font-semibold transition-all duration-200 mb-0.5 ${active
+        ? "bg-argon-primary text-white shadow-argon-primary"
+        : "text-argon-muted hover:bg-argon-lighter/50"
         }`}
     >
-      <Icon className={`w-[18px] h-[18px] ${active ? "text-blue-600" : "text-gray-400"}`} />
+      <div className={`w-8 h-8 rounded-argon flex items-center justify-center ${active
+        ? "bg-white/20"
+        : "bg-white shadow-argon-sm"
+        }`}>
+        <Icon className={`w-[14px] h-[14px] ${active ? "text-white" : "text-argon-primary"}`} />
+      </div>
       {label}
     </button>
   );
@@ -36,17 +41,17 @@ export default function Sidebar({ activeItem }: { activeItem: string }) {
   ];
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-white border-r border-gray-200 flex flex-col z-30 sidebar-scroll overflow-y-auto">
+    <aside className="fixed left-4 top-4 bottom-4 w-[250px] bg-white rounded-argon-lg flex flex-col z-30 sidebar-scroll overflow-y-auto shadow-argon">
       {/* Brand */}
-      <div className="flex items-center gap-0 px-0 pt-2 pb-0 flex-nowrap">
-        <div className="w-28 h-28 flex-shrink-0 flex items-center justify-center">
+      <div className="flex items-center gap-0 px-0 pt-2 pb-2 flex-nowrap border-b border-argon-lighter mb-4">
+        <div className="w-24 h-24 flex-shrink-0 flex items-center justify-center">
           <img src="/logo.png" alt="FL Platform Logo" className="w-full h-full object-contain" />
         </div>
-        <span className="font-bold text-lg text-gray-800 tracking-tight whitespace-nowrap">FL Platform</span>
+        <span className="font-bold text-base text-argon-default tracking-tight whitespace-nowrap">FL Platform</span>
       </div>
 
       {/* Nav sections */}
-      <nav className="flex-1 px-3 space-y-6 mt-1">
+      <nav className="flex-1 px-4 space-y-6">
         <div>
           {generalItems.map((item) => (
             <NavItem key={item.label} icon={item.icon} label={item.label} active={activeItem === item.label} />
@@ -54,19 +59,33 @@ export default function Sidebar({ activeItem }: { activeItem: string }) {
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest px-4 mb-2">Other Tools</p>
+          <p className="text-[0.625rem] font-bold text-argon-muted uppercase tracking-widest px-4 mb-2">Other Tools</p>
           {otherItems.map((item) => (
             <NavItem key={item.label} icon={item.icon} label={item.label} />
           ))}
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest px-4 mb-2">Support</p>
+          <p className="text-[0.625rem] font-bold text-argon-muted uppercase tracking-widest px-4 mb-2">Support</p>
           {supportItems.map((item) => (
             <NavItem key={item.label} icon={item.icon} label={item.label} />
           ))}
         </div>
       </nav>
+
+      {/* Need help card */}
+      <div className="px-4 pb-4 mt-4">
+        <div className="bg-argon-primary rounded-argon-lg p-4 text-center">
+          <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+            <HelpCircle className="w-5 h-5 text-white" />
+          </div>
+          <p className="text-white font-bold text-sm mb-0.5">Need help?</p>
+          <p className="text-white/70 text-xs mb-3">Please check our docs</p>
+          <button className="w-full py-2 bg-white text-argon-primary text-xs font-bold rounded-argon hover:shadow-argon-sm transition-all">
+            Documentation
+          </button>
+        </div>
+      </div>
     </aside>
   );
 }
