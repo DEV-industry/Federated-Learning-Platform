@@ -13,7 +13,7 @@ public class AggregationConsumer {
     private MinioService minioService;
 
     @Autowired
-    private AggregatorApplication aggregatorApplication;
+    private AggregatorCoordinator aggregatorCoordinator;
 
     @RabbitListener(queues = RabbitMQConfig.QUEUE_NAME)
     public void consumeModelSubmission(ModelSubmissionMessage message) {
@@ -24,11 +24,11 @@ public class AggregationConsumer {
             
             List<Double> weights = null;
             if (!message.getHeEnabled()) {
-                weights = aggregatorApplication.deserializeWeights(blob);
+                weights = aggregatorCoordinator.deserializeWeights(blob);
             }
 
             // Execute the FedAvg logic safely
-            aggregatorApplication.processNodeSubmission(
+            aggregatorCoordinator.processNodeSubmission(
                 message.getNodeId(), 
                 weights, 
                 message.getLoss(), 

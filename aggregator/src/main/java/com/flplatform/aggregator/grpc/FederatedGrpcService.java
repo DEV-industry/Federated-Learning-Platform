@@ -1,6 +1,6 @@
 package com.flplatform.aggregator.grpc;
 
-import com.flplatform.aggregator.AggregatorApplication;
+import com.flplatform.aggregator.AggregatorCoordinator;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +11,7 @@ import java.util.List;
 public class FederatedGrpcService extends FederatedServiceGrpc.FederatedServiceImplBase {
 
     @Autowired
-    private AggregatorApplication aggregatorContext;
+    private AggregatorCoordinator aggregatorContext;
 
     @Override
     public void submitWeights(WeightRequest request, StreamObserver<WeightResponse> responseObserver) {
