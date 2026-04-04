@@ -1,34 +1,41 @@
 "use client";
 
-export default function NodeActivityHeatmap({ nodeDetails, history }: { nodeDetails: any[]; history: any[] }) {
-  const timeSlots = ["Round -6", "Round -5", "Round -4", "Round -3", "Round -2", "Round -1", "Current"];
+export default function NodeActivityHeatmap({ nodeDetails, history, currentRound }: { nodeDetails: any[]; history: any[]; currentRound?: number }) {
   const days = nodeDetails.length > 0 ? nodeDetails.map((n: any) => n.nodeId.substring(0, 8)) : ["Node 1", "Node 2", "Node 3"];
+  const recentHistory = (history || []).slice(-6);
+  const historyOffset = Math.max(0, 6 - recentHistory.length);
+  const timeSlots = Array.from({ length: 6 }, (_, idx) => {
+    const historyIndex = idx - historyOffset;
+    if (historyIndex >= 0 && historyIndex < recentHistory.length) {
+      return `Round ${recentHistory[historyIndex].round}`;
+    }
+    return "—";
+  });
+  timeSlots.push(currentRound ? `Round ${currentRound}` : "Current");
+
+  const getStatusColor = (status?: string) => {
+    if (status === "Rejected") return "bg-red-300";
+    if (status === "Accepted") return "bg-blue-400";
+    return "bg-gray-100";
+  };
 
   const getColor = (row: number, col: number) => {
     if (nodeDetails.length === 0) return "bg-gray-100";
     const node = nodeDetails[row];
     if (!node) return "bg-gray-100";
     
-    // col === 6 is "Current", meaning the latest active training details
+    // col === 6 is the current round, meaning the latest active training details
     if (col === 6) {
       if (node.status === "Rejected") return "bg-red-300";
       if (node.status === "Accepted") return "bg-blue-400";
       return "bg-blue-200";
     }
 
-    // Historical data: Match based on history array which contains nodeStatuses mapped to node ids
-    if (history && history.length > 0) {
-      // The timeSlots are Round -6 to Current. So colIdx 0 is round (currentRound - 6)
-      // history array might have up to N records. We grab the right one.
-      const currentRound = history.length;
-      const targetRoundIdx = currentRound - (6 - col); // Because col is 0..5 for historical
-      
-      const targetHistoryRecord = history.find(h => h.round === targetRoundIdx);
-      if (targetHistoryRecord && targetHistoryRecord.nodeStatuses && targetHistoryRecord.nodeStatuses[node.nodeId]) {
-        const pastStatus = targetHistoryRecord.nodeStatuses[node.nodeId];
-        if (pastStatus === "Rejected") return "bg-red-300";
-        if (pastStatus === "Accepted") return "bg-blue-400";
-      }
+    const historyIndex = col - historyOffset;
+    if (historyIndex >= 0 && historyIndex < recentHistory.length) {
+      const targetHistoryRecord = recentHistory[historyIndex];
+      const pastStatus = targetHistoryRecord?.nodeStatuses?.[node.nodeId];
+      return getStatusColor(pastStatus);
     }
     
     // Fallback or "did not participate"
