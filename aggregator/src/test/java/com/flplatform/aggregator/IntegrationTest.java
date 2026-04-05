@@ -12,6 +12,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
 @Testcontainers
+@SuppressWarnings("resource")
 class IntegrationTest {
 
     private static final String TEST_DB_NAME = "flplatform_test";

@@ -8,7 +8,7 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import org.springframework.stereotype.Component;
-import net.devh.boot.grpc.server.interceptor.GrpcGlobalServerInterceptor;
+import net.devh.boot.grpc.server.interceptor.GrpcGlobalServerInterceptor;       
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -81,7 +81,7 @@ public class GrpcAuthInterceptor implements ServerInterceptor {
 
             if (principal != null && nodeCredentialService.isJwtSessionValid(principal.nodeId(), principal.authVersion())) {
                 String nodeId = principal.nodeId();
-                String method = call.getMethodDescriptor().getFullMethodName();
+                String method = call.getMethodDescriptor().getFullMethodName(); 
 
                 // Rate limiting for SubmitWeights (to prevent spamming weights)
                 if (method.contains("SubmitWeights")) {
@@ -93,4 +93,11 @@ public class GrpcAuthInterceptor implements ServerInterceptor {
                 }
 
                 Context ctx = Context.current().withValue(NODE_ID_CONTEXT_KEY, nodeId);
-                return Contexts.interceptCall(ctx, call, headers, next);
+                return Contexts.interceptCall(ctx, call, headers, next);        
+            }
+        }
+        
+        call.close(Status.UNAUTHENTICATED.withDescription("Invalid or missing JWT token"), new Metadata());
+        return new ServerCall.Listener<ReqT>() {};
+    }
+}

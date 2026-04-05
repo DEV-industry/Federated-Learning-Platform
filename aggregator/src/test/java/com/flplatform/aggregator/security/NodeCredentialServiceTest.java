@@ -34,7 +34,7 @@ class NodeCredentialServiceTest {
         String publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         String signatureBase64 = signMessage(keyPair.getPrivate(), "node-auth:node-1");
 
-        RegisteredNodeEntity node = nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, signatureBase64);
+RegisteredNodeEntity node = nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, signatureBase64, null, "1.0", "ModelX", "OSY", "CPUZ", "GPUW", "Global");
 
         assertEquals("node-1", node.getNodeId());
         assertEquals("pod-1", node.getHostname());
@@ -42,7 +42,7 @@ class NodeCredentialServiceTest {
     }
 
     @Test
-    void shouldRejectMismatchedPublicKeyForExistingNode() throws Exception {
+    void shouldRejectMismatchedPublicKeyForExistingNode() throws Exception {    
         RegisteredNodeRepository repository = mock(RegisteredNodeRepository.class);
         RegisteredNodeEntity existingNode = new RegisteredNodeEntity("node-1", "pod-1");
         existingNode.setPublicKey("existing-public-key");
@@ -54,13 +54,13 @@ class NodeCredentialServiceTest {
         String publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         String signatureBase64 = signMessage(keyPair.getPrivate(), "node-auth:node-1");
 
-        assertThrows(SecurityException.class, () -> nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, signatureBase64));
+        assertThrows(SecurityException.class, () -> nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, signatureBase64, null, "1.0", "ModelX", "OSY", "CPUZ", "GPUW", "Global"));
     }
 
     @Test
     void shouldRejectInvalidSignature() throws Exception {
         RegisteredNodeRepository repository = mock(RegisteredNodeRepository.class);
-        when(repository.findByNodeId("node-1")).thenReturn(Optional.empty());
+        when(repository.findByNodeId("node-1")).thenReturn(Optional.empty());   
 
         NodeCredentialService nodeCredentialService = new NodeCredentialService(repository);
 
@@ -68,7 +68,7 @@ class NodeCredentialServiceTest {
         String publicKeyBase64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         String invalidSignatureBase64 = Base64.getEncoder().encodeToString("invalid".getBytes(StandardCharsets.UTF_8));
 
-        assertThrows(SecurityException.class, () -> nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, invalidSignatureBase64));
+        assertThrows(SecurityException.class, () -> nodeCredentialService.authenticateNode("node-1", "pod-1", publicKeyBase64, invalidSignatureBase64, null, "1.0", "ModelX", "OSY", "CPUZ", "GPUW", "Global"));
     }
 
     @Test
