@@ -105,6 +105,11 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: TLS_CA_CERT_PATH
+            - name: GRPC_SSL_TARGET_NAME_OVERRIDE
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: GRPC_SSL_TARGET_NAME_OVERRIDE
             - name: CLIENT_VERSION
               valueFrom:
                 configMapKeyRef:

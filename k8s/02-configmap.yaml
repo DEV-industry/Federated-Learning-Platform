@@ -9,11 +9,15 @@ data:
   # Aggregator configuration
   AGGREGATOR_BASE_URL: "https://fl-aggregator.fl-platform.svc.cluster.local:8443"
   AGGREGATOR_GRPC_URL: "fl-aggregator.fl-platform.svc.cluster.local:9443"
-  AGGREGATOR_EXTERNAL_BASE_URL: "https://api.fl.local"
-  AGGREGATOR_EXTERNAL_GRPC_URL: "grpc.fl.local:9443"
+  # External endpoints for physical nodes (replace 'aggregator-api.example.com' with your public domain)
+  AGGREGATOR_EXTERNAL_BASE_URL: "https://aggregator-api.example.com:8443"
+  AGGREGATOR_EXTERNAL_GRPC_URL: "aggregator-api.example.com:9443"
   NODE_ENDPOINT_MODE: "internal"
   TLS_VERIFY: "true"
   TLS_CA_CERT_PATH: "/certs/ca.crt"
+  # SNI (Server Name Indication) for TLS handshake on external gRPC endpoint
+  # Should match the certificate CN or SAN when using external domain
+  GRPC_SSL_TARGET_NAME_OVERRIDE: "aggregator-api.example.com"
   SPRING_RABBITMQ_HOST: "rabbitmq"
   SPRING_RABBITMQ_PORT: "5672"
   FL_MIN_QUORUM: "3"
