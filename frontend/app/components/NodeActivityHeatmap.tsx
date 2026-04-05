@@ -29,8 +29,14 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
   const days = knownNodes.length > 0 ? knownNodes : ["Node 1", "Node 2", "Node 3"];
 
   const getStatusColor = (status?: string) => {
-    if (status === "Rejected") return "bg-argon-danger/60";
-    if (status === "Accepted") return "bg-argon-primary";
+    const normalized = (status || "").toLowerCase();
+
+    if (normalized.includes("reject")) return "bg-argon-danger/60";
+    if (normalized.includes("accept")) return "bg-argon-primary";
+    if (normalized.includes("train") || normalized.includes("upload") || normalized.includes("download")) {
+      return "bg-argon-primary/70";
+    }
+
     return "bg-argon-lighter";
   };
 
@@ -78,12 +84,15 @@ export default function NodeActivityHeatmap({ nodeDetails, history, currentRound
         <div className="overflow-x-auto">
           <div className="min-w-max">
             {/* Column labels */}
-            <div className="flex mb-2 ml-20">
-              {visibleColumns.map((round, idx) => (
-                <div key={`${round}-${idx}`} className="w-16 shrink-0 text-center text-[10px] text-argon-muted font-semibold">
-                  {round === 0 ? "-" : `R${round}`}
-                </div>
-              ))}
+            <div className="flex items-center mb-2">
+              <span className="w-20 shrink-0" />
+              <div className="flex gap-1 min-w-max">
+                {visibleColumns.map((round, idx) => (
+                  <div key={`${round}-${idx}`} className="w-16 shrink-0 text-center text-[10px] text-argon-muted font-semibold">
+                    {round === 0 ? "-" : `R${round}`}
+                  </div>
+                ))}
+              </div>
             </div>
             {/* Rows */}
             {days.map((day, rowIdx) => (
