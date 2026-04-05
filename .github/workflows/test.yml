@@ -14,6 +14,9 @@ jobs:
       NODE_ID: test-node
       NODE_SECRET: dummy-secret-for-tests
       AGGREGATOR_BASE_URL: https://localhost:8080
+      MODEL_CACHE_DIR: .pytest_cache/models
+      CHECKPOINT_DIR: .pytest_cache/checkpoints
+      NODE_PRIVATE_KEY_PATH: .pytest_cache/node_identity.pem
     steps:
       - uses: actions/checkout@v4
 
