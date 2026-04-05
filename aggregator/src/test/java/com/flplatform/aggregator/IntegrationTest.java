@@ -37,7 +37,8 @@ class IntegrationTest {
     // Konfiguracja kontenera RabbitMQ
     @Container
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3-management-alpine")
-            .withUser(TEST_RABBIT_USER, TEST_RABBIT_PASSWORD);
+            .withEnv("RABBITMQ_DEFAULT_USER", TEST_RABBIT_USER)
+            .withEnv("RABBITMQ_DEFAULT_PASS", TEST_RABBIT_PASSWORD);
 
     // Konfiguracja kontenera MinIO
     @Container

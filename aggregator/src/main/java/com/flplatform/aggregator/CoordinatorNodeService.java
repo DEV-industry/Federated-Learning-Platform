@@ -10,8 +10,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class CoordinatorNodeService {
+
+    private static final Logger log = LoggerFactory.getLogger(CoordinatorNodeService.class);
 
     public synchronized ResponseEntity<Map<String, Object>> registerNode(
             Map<String, String> payload,

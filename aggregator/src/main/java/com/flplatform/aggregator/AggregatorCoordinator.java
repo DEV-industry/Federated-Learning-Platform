@@ -488,6 +488,7 @@ public class AggregatorCoordinator {
         } catch (Exception e) {
             log.error("Failed to process weights for {}", nodeId, e);
             MDC.clear();
+            return false;
         }
     }
 
