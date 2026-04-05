@@ -22,6 +22,11 @@ import java.security.NoSuchAlgorithmException;
 import com.flplatform.aggregator.security.NodeCredentialService;
 import org.springframework.stereotype.Service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +34,11 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class AggregatorCoordinator {
+
+    private static final Logger log = LoggerFactory.getLogger(AggregatorCoordinator.class);
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     // Osobna pula workerów do zapisu (izolacja MinIO/RabbitMQ z timeoutami)
     private final ExecutorService submitExecutor = Executors.newFixedThreadPool(10);
@@ -255,6 +265,11 @@ public class AggregatorCoordinator {
     @Transactional
     public void checkStaleNodes() {
         coordinatorNodeService.checkStaleNodes(registeredNodeRepository, heartbeatStaleThresholdSeconds);
+        // Zaktualizuj metryki liczników węzłów
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "ACTIVE")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "STALE")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.STALE));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "BANNED")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.BANNED));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "LOCKED")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.LOCKED));
     }
 
     // =========================================================================
@@ -314,50 +329,67 @@ public class AggregatorCoordinator {
     }
 
     public synchronized boolean validateAndQueueWeights(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, byte[] encryptedWeights, byte[] heContextPublic) {
+        
+        MDC.put("nodeId", nodeId);
+        MDC.put("roundId", String.valueOf(roundNumber));
 
         // Validate round
         if (roundNumber == null || roundNumber != currentRound) {
-            System.out.println("Discarded weights from " + nodeId +": invalid or outdated round (got " + roundNumber + ", expected " + currentRound + ")");
+            log.warn("Discarded weights from {}: invalid or outdated round (got {}, expected {})", nodeId, roundNumber, currentRound);
+            meterRegistry.counter("submit_reject_total", "reason", "invalid_round").increment();
+            MDC.clear();
             return false;
         }
 
         // Verify node is registered and active
         Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(nodeId);
         if (nodeOpt.isEmpty()) {
+            meterRegistry.counter("submit_reject_total", "reason", "unregistered_node").increment();
+            MDC.clear();
             return false;
         }
         
         RegisteredNodeEntity node = nodeOpt.get();
         if (node.getStatus() == RegisteredNodeEntity.NodeStatus.LOCKED || node.getStatus() == RegisteredNodeEntity.NodeStatus.BANNED) {
-            System.out.println("Discarded weights from " + nodeId +": node is " + node.getStatus());
+            log.warn("Discarded weights from {}: node is {}", nodeId, node.getStatus());
+            meterRegistry.counter("submit_reject_total", "reason", "node_locked_banned").increment();
+            MDC.clear();
             return false;
         }
         
         // Freshness check: if stale by more than double the threshold, block
         if (node.getLastHeartbeat().plusMinutes(5).isBefore(LocalDateTime.now())) {
-            System.out.println("Discarded weights from " + nodeId +": heartbeat is too stale.");
+            log.warn("Discarded weights from {}: heartbeat is too stale.", nodeId);
+            meterRegistry.counter("submit_reject_total", "reason", "stale_heartbeat").increment();
+            MDC.clear();
             return false;
         }
         
         // Sanity checks on metrics and weights
         if (loss != null && (loss.isNaN() || loss.isInfinite() || loss < 0)) {
-            System.out.println("Discarded weights from " + nodeId +": invalid loss value.");
+            log.warn("Discarded weights from {}: invalid loss value.", nodeId);
+            meterRegistry.counter("submit_reject_total", "reason", "invalid_loss").increment();
             node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
             registeredNodeRepository.save(node);
+            MDC.clear();
             return false;
         }
         if (accuracy != null && (accuracy.isNaN() || accuracy.isInfinite() || accuracy < 0 || accuracy > 1.0)) {
-            System.out.println("Discarded weights from " + nodeId +": invalid accuracy value.");
+            log.warn("Discarded weights from {}: invalid accuracy value.", nodeId);
+            meterRegistry.counter("submit_reject_total", "reason", "invalid_accuracy").increment();
             node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
             registeredNodeRepository.save(node);
+            MDC.clear();
             return false;
         }
         if ((heEnabled == null || !heEnabled) && weights != null) {
             for (Double w : weights) {
                 if (w == null || w.isNaN() || w.isInfinite()) {
-                    System.out.println("Discarded weights from " + nodeId +": invalid weight payload (NaN/Inf).");
+                    log.warn("Discarded weights from {}: invalid weight payload (NaN/Inf).", nodeId);
+                    meterRegistry.counter("submit_reject_total", "reason", "invalid_weights").increment();
                     node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
                     registeredNodeRepository.save(node);
+                    MDC.clear();
                     return false;
                 }
             }
@@ -368,35 +400,41 @@ public class AggregatorCoordinator {
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         registeredNodeRepository.save(node);
 
-        System.out.println("Received weights from " + nodeId + " (sending to MinIO and RabbitMQ queue)");
+        log.info("Received weights from {}", nodeId);
 
         try {
             byte[] data;
 
             if (this.heEnabledConfig && (heEnabled == null || !heEnabled)) {
-                System.out.println("Rejected submission from " + nodeId + ": HE is required but submission is plaintext.");
+                log.warn("Rejected submission from {}: HE is required but submission is plaintext.", nodeId);
+                meterRegistry.counter("submit_reject_total", "reason", "he_required").increment();
+                MDC.clear();
                 return false;
             }
 
             if (!this.heEnabledConfig && heEnabled != null && heEnabled) {
-                System.out.println("Rejected submission from " + nodeId + ": HE payload provided while HE mode is disabled.");
+                log.warn("Rejected submission from {}: HE payload provided while HE mode is disabled.", nodeId);
+                meterRegistry.counter("submit_reject_total", "reason", "he_disabled").increment();
+                MDC.clear();
                 return false;
             }
 
             if (heEnabled != null && heEnabled) {
                 if (encryptedWeights == null || heContextPublic == null) {
-                    System.out.println("Rejected HE submission from " + nodeId + ": missing encrypted payload or HE context.");
+                    log.warn("Rejected HE submission from {}: missing encrypted payload or HE context.", nodeId);
+                    meterRegistry.counter("submit_reject_total", "reason", "missing_he_payload").increment();
+                    MDC.clear();
                     return false;
                 }
 
                 if (this.heContextPublic == null) {
                     this.heContextPublic = Arrays.copyOf(heContextPublic, heContextPublic.length);
-                    System.out.println("HE public context established from node " + nodeId
-                            + " (fingerprint=" + heContextFingerprint(this.heContextPublic) + ")");
+                    log.info("HE public context established from node {} (fingerprint={})", nodeId, heContextFingerprint(this.heContextPublic));
                 } else if (!Arrays.equals(this.heContextPublic, heContextPublic)) {
-                    System.out.println("Rejected HE submission from " + nodeId
-                            + ": public context mismatch (expected=" + heContextFingerprint(this.heContextPublic)
-                            + ", got=" + heContextFingerprint(heContextPublic) + ")");
+                    log.warn("Rejected HE submission from {}: public context mismatch (expected={}, got={})", 
+                              nodeId, heContextFingerprint(this.heContextPublic), heContextFingerprint(heContextPublic));
+                    meterRegistry.counter("submit_reject_total", "reason", "he_context_mismatch").increment();
+                    MDC.clear();
                     return false;
                 }
 
@@ -404,15 +442,22 @@ public class AggregatorCoordinator {
             } else {
                 data = this.serializeWeights(weights);
             }
-            
+
             long timestamp = System.currentTimeMillis();
             String path = "client-models/round-" + currentRound + "/" + nodeId + "-" + timestamp + ".bin";
             
             final byte[] finalData = data;
             final byte[] finalHeContext = this.heContextPublic != null ? Arrays.copyOf(this.heContextPublic, this.heContextPublic.length) : null;
+            final String mdcNodeId = MDC.get("nodeId");
+            final String mdcRoundId = MDC.get("roundId");
 
             CompletableFuture.runAsync(() -> {
+                if (mdcNodeId != null) MDC.put("nodeId", mdcNodeId);
+                if (mdcRoundId != null) MDC.put("roundId", mdcRoundId);
+                
                 try {
+                    Timer.Sample timer = Timer.start(meterRegistry);
+                    
                     minioService.uploadWeights(path, finalData);
 
                     String heContextPath = null;
@@ -425,19 +470,24 @@ public class AggregatorCoordinator {
                             nodeId, path, loss, accuracy, dpEnabled, roundNumber, heEnabled, heContextPath);
 
                     rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
-                    System.out.println("Queued submission for " + nodeId + " successfully.");
+                    log.info("Queued submission for {} successfully.", nodeId);
+                    
+                    timer.stop(meterRegistry.timer("he_aggregation_io_latency"));
                 } catch (Exception e) {
-                    System.err.println("Circuit breaker / Upload failed for node " + nodeId + ": " + e.getMessage());
+                    log.error("Circuit breaker / Upload failed for node {}: {}", nodeId, e.getMessage());
+                } finally {
+                    MDC.clear();
                 }
             }, submitExecutor).orTimeout(15, TimeUnit.SECONDS).exceptionally(ex -> {
-                System.err.println("Timeout uploading weights for " + nodeId);
+                log.error("Timeout uploading weights for {}", nodeId);
                 return null;
             });
 
+            MDC.clear();
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
-            return false;
+            log.error("Failed to process weights for {}", nodeId, e);
+            MDC.clear();
         }
     }
 
@@ -479,8 +529,13 @@ public class AggregatorCoordinator {
     }
 
     public synchronized void processNodeSubmission(String nodeId, List<Double> weights, Double loss, Double accuracy, Boolean dpEnabled, Integer roundNumber, Boolean heEnabled, byte[] encryptedBlob, String heContextPath) {
+        
+        MDC.put("nodeId", nodeId);
+        MDC.put("roundId", String.valueOf(roundNumber));
+        
         if (roundNumber == null || roundNumber != currentRound) {
-            System.out.println("Processing skipped for nodeId " + nodeId + ": outdated round (got " + roundNumber + ", expected " + currentRound + ")");
+            log.warn("Processing skipped for nodeId {}: outdated round (got {}, expected {})", nodeId, roundNumber, currentRound);
+            MDC.clear();
             return;
         }
 
@@ -511,11 +566,14 @@ public class AggregatorCoordinator {
         // Check if we've reached the dynamic quorum
         int effectiveQuorum = Math.max(minQuorum, targetQuorum);
 
+        log.info("Node {} added weights to pool. Current: {} / Effective Quorum: {}", nodeId, nodeWeights.size(), effectiveQuorum);
+        
         if (nodeWeights.size() >= effectiveQuorum) {
             aggregateWeights();
         }
 
         broadcastUpdate();
+        MDC.clear();
     }
 
     public synchronized Map<String, Object> updateConfig(Map<String, Object> config) {
@@ -579,6 +637,12 @@ public class AggregatorCoordinator {
     // =========================================================================
 
     private void aggregateWeights() {
+        if (roundStartTime != null) {
+            long duration = java.time.Duration.between(roundStartTime, LocalDateTime.now()).getSeconds();
+            meterRegistry.timer("round_duration_seconds").record(duration, TimeUnit.SECONDS);
+            log.info("Aggregating Round {}. Duration: {} seconds", currentRound, duration);
+        }
+
         RoundAggregationService.AggregationOutcome outcome = roundAggregationService.aggregateRound(
                 currentRound,
                 globalWeights,

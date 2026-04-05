@@ -1,5 +1,9 @@
 package com.flplatform.aggregator.security;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -9,13 +13,16 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api")
 public class AuthController {
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final JwtUtil jwtUtil;
     private final NodeCredentialService nodeCredentialService;
+    private final MeterRegistry meterRegistry;
 
-    public AuthController(JwtUtil jwtUtil, NodeCredentialService nodeCredentialService) {
+    public AuthController(JwtUtil jwtUtil, NodeCredentialService nodeCredentialService, MeterRegistry meterRegistry) {
         this.jwtUtil = jwtUtil;
         this.nodeCredentialService = nodeCredentialService;
+        this.meterRegistry = meterRegistry;
     }
 
     @PostMapping("/auth")
@@ -31,8 +38,12 @@ public class AuthController {
         String deviceCpu = payload.get("deviceCpu");
         String deviceGpu = payload.get("deviceGpu");
         String deviceRegion = payload.get("deviceRegion");
+        
+        MDC.put("nodeId", nodeId != null ? nodeId : "unknown");
 
         if (nodeId == null || nodeId.isBlank()) {
+            meterRegistry.counter("auth_failure", "reason", "missing_nodeId").increment();
+            MDC.clear();
             return ResponseEntity.badRequest().body(Map.of(
                 "status", "error",
                 "message", "nodeId is required"
@@ -40,6 +51,8 @@ public class AuthController {
         }
 
         if (publicKey == null || publicKey.isBlank()) {
+            meterRegistry.counter("auth_failure", "reason", "missing_publicKey").increment();
+            MDC.clear();
             return ResponseEntity.badRequest().body(Map.of(
                 "status", "error",
                 "message", "publicKey is required"
@@ -47,6 +60,8 @@ public class AuthController {
         }
 
         if (signature == null || signature.isBlank()) {
+            meterRegistry.counter("auth_failure", "reason", "missing_signature").increment();
+            MDC.clear();
             return ResponseEntity.badRequest().body(Map.of(
                 "status", "error",
                 "message", "signature is required"
@@ -69,18 +84,30 @@ public class AuthController {
                         deviceGpu,
                         deviceRegion)
                     .getAuthVersion();
+            
+            meterRegistry.counter("auth_success").increment();
+            log.info("Node {} successfully authenticated. IP: {}", nodeId, hostname);
+            
         } catch (IllegalArgumentException e) {
+            meterRegistry.counter("auth_failure", "reason", "invalid_arguments").increment();
+            log.warn("Auth failed for {}: {}", nodeId, e.getMessage());
+            MDC.clear();
             return ResponseEntity.badRequest().body(Map.of(
                 "status", "error",
                 "message", e.getMessage()
             ));
         } catch (SecurityException e) {
+            meterRegistry.counter("auth_failure", "reason", "security_exception").increment();
+            log.warn("Security exception during auth for {}: {}", nodeId, e.getMessage());
+            MDC.clear();
             return ResponseEntity.status(401).body(Map.of(
                 "status", "error",
                 "message", e.getMessage()
             ));
         }
+        
         String token = jwtUtil.generateToken(nodeId, authVersion);
+        MDC.clear();
 
         return ResponseEntity.ok(Map.of(
             "status", "success",

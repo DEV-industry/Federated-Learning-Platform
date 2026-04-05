@@ -146,7 +146,7 @@ public class CoordinatorNodeService {
             if (node.getStatus() == RegisteredNodeEntity.NodeStatus.ACTIVE) {
                 node.setStatus(RegisteredNodeEntity.NodeStatus.STALE);
                 registeredNodeRepository.save(node);
-                System.out.println("Node marked STALE (no heartbeat): " + node.getNodeId());
+                log.warn("Node marked STALE (no heartbeat): {}", node.getNodeId());
             }
         }
     }
