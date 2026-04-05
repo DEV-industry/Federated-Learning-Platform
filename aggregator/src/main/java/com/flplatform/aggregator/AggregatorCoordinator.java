@@ -266,10 +266,14 @@ public class AggregatorCoordinator {
     public void checkStaleNodes() {
         coordinatorNodeService.checkStaleNodes(registeredNodeRepository, heartbeatStaleThresholdSeconds);
         // Zaktualizuj metryki liczników węzłów
-        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "ACTIVE")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
-        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "STALE")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.STALE));
-        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "BANNED")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.BANNED));
-        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "LOCKED")), registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.LOCKED));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "ACTIVE")), 
+            registeredNodeRepository, repo -> (double) repo.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "STALE")), 
+            registeredNodeRepository, repo -> (double) repo.countByStatus(RegisteredNodeEntity.NodeStatus.STALE));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "BANNED")), 
+            registeredNodeRepository, repo -> (double) repo.countByStatus(RegisteredNodeEntity.NodeStatus.BANNED));
+        meterRegistry.gauge("fl_nodes_total", List.of(io.micrometer.core.instrument.Tag.of("status", "LOCKED")), 
+            registeredNodeRepository, repo -> (double) repo.countByStatus(RegisteredNodeEntity.NodeStatus.LOCKED));
     }
 
     // =========================================================================

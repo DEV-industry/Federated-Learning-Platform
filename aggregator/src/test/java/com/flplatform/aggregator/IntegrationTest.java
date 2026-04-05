@@ -24,7 +24,7 @@ class IntegrationTest {
     private static final String TEST_MINIO_BUCKET = "fl-models-test";
 
     private static final String TEST_JWT_SECRET = "test-jwt-secret-key-with-at-least-32-bytes";
-    private static final String TEST_RABBIT_USER = "testuser";
+    private static final String TEST_RABBIT_USER = "guest";
     private static final String TEST_RABBIT_PASSWORD = "testpass";
 
     // Konfiguracja kontenera PostgreSQL
@@ -37,8 +37,7 @@ class IntegrationTest {
     // Konfiguracja kontenera RabbitMQ
     @Container
     static RabbitMQContainer rabbitmq = new RabbitMQContainer("rabbitmq:3-management-alpine")
-            .withEnv("RABBITMQ_DEFAULT_USER", TEST_RABBIT_USER)
-            .withEnv("RABBITMQ_DEFAULT_PASS", TEST_RABBIT_PASSWORD);
+            .withAdminPassword(TEST_RABBIT_PASSWORD);
 
     // Konfiguracja kontenera MinIO
     @Container
