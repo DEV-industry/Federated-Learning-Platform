@@ -22,8 +22,17 @@ import java.security.NoSuchAlgorithmException;
 import com.flplatform.aggregator.security.NodeCredentialService;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 @Service
 public class AggregatorCoordinator {
+
+    // Osobna pula workerów do zapisu (izolacja MinIO/RabbitMQ z timeoutami)
+    private final ExecutorService submitExecutor = Executors.newFixedThreadPool(10);
 
     @Autowired
     private RoundRepository roundRepository;
@@ -313,14 +322,49 @@ public class AggregatorCoordinator {
             return false;
         }
 
-        // Verify node is registered
+        // Verify node is registered and active
         Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(nodeId);
         if (nodeOpt.isEmpty()) {
             return false;
         }
+        
+        RegisteredNodeEntity node = nodeOpt.get();
+        if (node.getStatus() == RegisteredNodeEntity.NodeStatus.LOCKED || node.getStatus() == RegisteredNodeEntity.NodeStatus.BANNED) {
+            System.out.println("Discarded weights from " + nodeId +": node is " + node.getStatus());
+            return false;
+        }
+        
+        // Freshness check: if stale by more than double the threshold, block
+        if (node.getLastHeartbeat().plusMinutes(5).isBefore(LocalDateTime.now())) {
+            System.out.println("Discarded weights from " + nodeId +": heartbeat is too stale.");
+            return false;
+        }
+        
+        // Sanity checks on metrics and weights
+        if (loss != null && (loss.isNaN() || loss.isInfinite() || loss < 0)) {
+            System.out.println("Discarded weights from " + nodeId +": invalid loss value.");
+            node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
+            registeredNodeRepository.save(node);
+            return false;
+        }
+        if (accuracy != null && (accuracy.isNaN() || accuracy.isInfinite() || accuracy < 0 || accuracy > 1.0)) {
+            System.out.println("Discarded weights from " + nodeId +": invalid accuracy value.");
+            node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
+            registeredNodeRepository.save(node);
+            return false;
+        }
+        if ((heEnabled == null || !heEnabled) && weights != null) {
+            for (Double w : weights) {
+                if (w == null || w.isNaN() || w.isInfinite()) {
+                    System.out.println("Discarded weights from " + nodeId +": invalid weight payload (NaN/Inf).");
+                    node.setStatus(RegisteredNodeEntity.NodeStatus.LOCKED);
+                    registeredNodeRepository.save(node);
+                    return false;
+                }
+            }
+        }
 
         // Update heartbeat on weight submission
-        RegisteredNodeEntity node = nodeOpt.get();
         node.setLastHeartbeat(LocalDateTime.now());
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         registeredNodeRepository.save(node);
@@ -364,19 +408,33 @@ public class AggregatorCoordinator {
             
             long timestamp = System.currentTimeMillis();
             String path = "client-models/round-" + currentRound + "/" + nodeId + "-" + timestamp + ".bin";
-            minioService.uploadWeights(path, data);
             
-            String heContextPath = null;
-            if (heEnabled != null && heEnabled) {
-                heContextPath = "context/round-" + currentRound + "/public.ctx";
-                minioService.uploadWeights(heContextPath, this.heContextPublic);
-            }
+            final byte[] finalData = data;
+            final byte[] finalHeContext = this.heContextPublic != null ? Arrays.copyOf(this.heContextPublic, this.heContextPublic.length) : null;
 
-            ModelSubmissionMessage msg = new ModelSubmissionMessage(
-                    nodeId, path, loss, accuracy, dpEnabled, roundNumber, heEnabled, heContextPath);
-            
-            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
-            
+            CompletableFuture.runAsync(() -> {
+                try {
+                    minioService.uploadWeights(path, finalData);
+
+                    String heContextPath = null;
+                    if (heEnabled != null && heEnabled) {
+                        heContextPath = "context/round-" + currentRound + "/public.ctx";
+                        minioService.uploadWeights(heContextPath, finalHeContext);
+                    }
+
+                    ModelSubmissionMessage msg = new ModelSubmissionMessage(
+                            nodeId, path, loss, accuracy, dpEnabled, roundNumber, heEnabled, heContextPath);
+
+                    rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY, msg);
+                    System.out.println("Queued submission for " + nodeId + " successfully.");
+                } catch (Exception e) {
+                    System.err.println("Circuit breaker / Upload failed for node " + nodeId + ": " + e.getMessage());
+                }
+            }, submitExecutor).orTimeout(15, TimeUnit.SECONDS).exceptionally(ex -> {
+                System.err.println("Timeout uploading weights for " + nodeId);
+                return null;
+            });
+
             return true;
         } catch (Exception e) {
             e.printStackTrace();

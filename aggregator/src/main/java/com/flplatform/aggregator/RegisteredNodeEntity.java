@@ -46,7 +46,7 @@ public class RegisteredNodeEntity {
     private LocalDateTime enrolledAt;
 
     public enum NodeStatus {
-        ACTIVE, STALE, DISCONNECTED
+        ACTIVE, STALE, DISCONNECTED, LOCKED, BANNED
     }
 
     public RegisteredNodeEntity() {}
