@@ -7,6 +7,8 @@ import socket
 import random
 import base64
 import platform
+import json
+import psutil
 from urllib.parse import urlparse
 import torch
 import torch.nn as nn
@@ -98,6 +100,61 @@ REQUESTS_VERIFY_ARG = _build_requests_verify_arg()
 REGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/register"
 HEARTBEAT_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/heartbeat"
 UNREGISTER_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/unregister"
+
+# =========================================================================
+# DEVICE RUNTIME CONFIGURATION — For Physical Nodes
+# =========================================================================
+# Supports both environment variables (priority 1) and config file (priority 2)
+# Example: DEVICE_RUNTIME_CONFIG_PATH=/etc/fl-platform/node-config.json
+
+DEVICE_RUNTIME_CONFIG_PATH = os.getenv("DEVICE_RUNTIME_CONFIG_PATH", "").strip()
+MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", "/var/cache/fl-node/models").strip()
+CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "/var/cache/fl-node/checkpoints").strip()
+WATCHDOG_ENABLED = os.getenv("WATCHDOG_ENABLED", "true").lower() == "true"
+WATCHDOG_CHECK_INTERVAL = int(os.getenv("WATCHDOG_CHECK_INTERVAL", "30"))
+CONFIG_PRIORITY_ENV_FIRST = True  # Environment variables override config file
+
+def load_device_runtime_config():
+    """Load device runtime config from JSON file.
+    Priority: env vars > config file > defaults
+    Config file path: DEVICE_RUNTIME_CONFIG_PATH
+    """
+    config = {
+        "model_cache_dir": MODEL_CACHE_DIR,
+        "checkpoint_dir": CHECKPOINT_DIR,
+        "watchdog_enabled": WATCHDOG_ENABLED,
+        "watchdog_check_interval": WATCHDOG_CHECK_INTERVAL,
+    }
+    
+    if DEVICE_RUNTIME_CONFIG_PATH and os.path.exists(DEVICE_RUNTIME_CONFIG_PATH):
+        try:
+            with open(DEVICE_RUNTIME_CONFIG_PATH, "r") as f:
+                file_config = json.load(f)
+            
+            # Only override defaults if not set via env vars
+            if "model_cache_dir" in file_config and not os.getenv("MODEL_CACHE_DIR"):
+                config["model_cache_dir"] = file_config["model_cache_dir"]
+            if "checkpoint_dir" in file_config and not os.getenv("CHECKPOINT_DIR"):
+                config["checkpoint_dir"] = file_config["checkpoint_dir"]
+            if "watchdog_enabled" in file_config and not os.getenv("WATCHDOG_ENABLED"):
+                config["watchdog_enabled"] = file_config["watchdog_enabled"]
+            if "watchdog_check_interval" in file_config and not os.getenv("WATCHDOG_CHECK_INTERVAL"):
+                config["watchdog_check_interval"] = file_config["watchdog_check_interval"]
+            
+            print(f"[{NODE_ID}] Loaded device runtime config from {DEVICE_RUNTIME_CONFIG_PATH}")
+        except Exception as e:
+            print(f"[{NODE_ID}] Warning: Failed to load runtime config: {e}. Using env/defaults.")
+    
+    # Create directories
+    try:
+        os.makedirs(config["model_cache_dir"], exist_ok=True)
+        os.makedirs(config["checkpoint_dir"], exist_ok=True)
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Failed to create cache directories: {e}")
+    
+    return config
+
+RUNTIME_CONFIG = load_device_runtime_config()
 
 # Dynamic identity: must be set from environment (e.g., downward API in K8s)
 NODE_ID = os.getenv("NODE_ID")
@@ -222,6 +279,106 @@ def get_auth_headers():
         return {"Authorization": f"Bearer {JWT_TOKEN}"}
     return {}
 
+# =========================================================================
+# MODEL CACHE & CHECKPOINT — Persistent local state for physical devices
+# =========================================================================
+
+def get_checkpoint_path(round_number):
+    """Generate checkpoint file path for a given round."""
+    return os.path.join(RUNTIME_CONFIG["checkpoint_dir"], f"model_round_{round_number}.pt")
+
+def get_model_cache_path():
+    """Get path for the most recent model cache file."""
+    return os.path.join(RUNTIME_CONFIG["model_cache_dir"], "model_latest.pt")
+
+def get_he_context_fingerprint_path():
+    """Get path for stored HE context fingerprint (for validation)."""
+    return os.path.join(RUNTIME_CONFIG["checkpoint_dir"], "he_context_fingerprint.txt")
+
+def validate_he_context_consistency():
+    """
+    Validates that the loaded HE context matches the stored fingerprint.
+    This ensures all physical devices use identical HE context for aggregation.
+    """
+    if not HE_ENABLED or not he_context:
+        return True
+    
+    try:
+        import hashlib
+        # Get fingerprint of current context (convert to base64 and hash)
+        context_b64 = he_manager.export_context_to_base64(he_context) if hasattr(he_manager, 'export_context_to_base64') else HE_SHARED_CONTEXT_B64
+        current_fingerprint = hashlib.sha256(context_b64.encode() if isinstance(context_b64, str) else context_b64).hexdigest()
+        
+        fingerprint_path = get_he_context_fingerprint_path()
+        
+        if os.path.exists(fingerprint_path):
+            with open(fingerprint_path, "r") as f:
+                stored_fingerprint = f.read().strip()
+            
+            if current_fingerprint != stored_fingerprint:
+                print(f"[{NODE_ID}] ERROR: HE context fingerprint mismatch!")
+                print(f"  Stored:  {stored_fingerprint}")
+                print(f"  Current: {current_fingerprint}")
+                print(f"  This indicates HE context divergence across physical nodes. Cannot proceed.")
+                return False
+        else:
+            # First time: store fingerprint
+            os.makedirs(os.path.dirname(fingerprint_path), exist_ok=True)
+            with open(fingerprint_path, "w") as f:
+                f.write(current_fingerprint)
+            print(f"[{NODE_ID}] Stored HE context fingerprint: {current_fingerprint}")
+        
+        return True
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Could not validate HE context consistency: {e}")
+        # Don't fail if fingerprinting fails - continue training
+        return True
+
+def save_model_checkpoint(model, round_number):
+    """Save model state dict to checkpoint after successful training round."""
+    try:
+        checkpoint_path = get_checkpoint_path(round_number)
+        torch.save(model.state_dict(), checkpoint_path)
+        print(f"[{NODE_ID}] Saved model checkpoint for round {round_number} to {checkpoint_path}")
+        return True
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Failed to save checkpoint: {e}")
+        return False
+
+def load_model_checkpoint(model, round_number):
+    """Load model state dict from checkpoint if it exists."""
+    try:
+        checkpoint_path = get_checkpoint_path(round_number)
+        if os.path.exists(checkpoint_path):
+            model.load_state_dict(torch.load(checkpoint_path))
+            print(f"[{NODE_ID}] Loaded model checkpoint for round {round_number} from {checkpoint_path}")
+            return True
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Failed to load checkpoint for round {round_number}: {e}")
+    return False
+
+def save_model_cache(model):
+    """Save latest model to cache for quick recovery on restart."""
+    try:
+        cache_path = get_model_cache_path()
+        torch.save(model.state_dict(), cache_path)
+        return True
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Failed to save model cache: {e}")
+        return False
+
+def load_model_cache(model):
+    """Attempt to load model from cache on startup."""
+    try:
+        cache_path = get_model_cache_path()
+        if os.path.exists(cache_path):
+            model.load_state_dict(torch.load(cache_path))
+            print(f"[{NODE_ID}] Loaded model from cache {cache_path} on startup")
+            return True
+    except Exception as e:
+        print(f"[{NODE_ID}] Warning: Failed to load model from cache: {e}")
+    return False
+
 def authenticate(max_retries=60, retry_delay=5):
     global JWT_TOKEN
     print(f"[{NODE_ID}] Authenticating with aggregator at {AUTH_URL}...")
@@ -277,6 +434,61 @@ def _graceful_shutdown(signum, frame):
 
 signal.signal(signal.SIGTERM, _graceful_shutdown)
 signal.signal(signal.SIGINT, _graceful_shutdown)
+
+# =========================================================================
+# WATCHDOG — Health monitoring and auto-recovery for physical devices
+# =========================================================================
+
+_last_heartbeat_time = time.time()
+_watchdog_check_enabled = RUNTIME_CONFIG["watchdog_enabled"]
+
+def record_heartbeat():
+    """Record that the process is alive (called periodically by main loop)."""
+    global _last_heartbeat_time
+    _last_heartbeat_time = time.time()
+
+def watchdog_monitor():
+    """Background thread that monitors process health and triggers recovery if needed."""
+    if not _watchdog_check_enabled:
+        print(f"[{NODE_ID}] Watchdog is disabled.")
+        return
+    
+    check_interval = RUNTIME_CONFIG["watchdog_check_interval"]
+    max_stale_time = check_interval * 5  # If no activity for 5 check intervals, restart
+    
+    print(f"[{NODE_ID}] Watchdog started (check_interval={check_interval}s, max_stale={max_stale_time}s)")
+    
+    while not _shutdown_flag.is_set():
+        try:
+            current_time = time.time()
+            time_since_last_activity = current_time - _last_heartbeat_time
+            
+            # Get CPU/Memory usage
+            try:
+                process = psutil.Process()
+                cpu_percent = process.cpu_percent(interval=1)
+                memory_info = process.memory_info()
+                memory_mb = memory_info.rss / (1024 * 1024)
+            except:
+                cpu_percent = 0
+                memory_mb = 0
+            
+            if time_since_last_activity > max_stale_time:
+                print(f"[{NODE_ID}] WARNING: Watchdog detected stale process ({time_since_last_activity:.0f}s inactive). CPU={cpu_percent}%, Memory={memory_mb:.0f}MB")
+                print(f"[{NODE_ID}] Setting shutdown flag for graceful restart...")
+                _shutdown_flag.set()
+            else:
+                if time_since_last_activity > check_interval * 2:
+                    print(f"[{NODE_ID}] Watchdog: Process possibly stuck (last activity {time_since_last_activity:.0f}s ago)")
+        
+        except Exception as e:
+            print(f"[{NODE_ID}] Watchdog error: {e}")
+        
+        # Sleep in intervals to respond to shutdown quickly
+        for _ in range(check_interval):
+            if _shutdown_flag.is_set():
+                return
+            time.sleep(1)
 
 # =========================================================================
 # MODEL DEFINITION
@@ -492,7 +704,22 @@ def get_data_loader():
 def train_and_send():
     """Main training loop for the Federated Learning client."""
     
-    # Step 0: Authenticate
+    print(f"[{NODE_ID}] ================================================")
+    print(f"[{NODE_ID}] FL Node Client Starting (Device Runtime Layer)")
+    print(f"[{NODE_ID}] Mode: NODE_ENDPOINT_MODE={NODE_ENDPOINT_MODE}")
+    print(f"[{NODE_ID}] Device Runtime: model_cache={RUNTIME_CONFIG['model_cache_dir']}, checkpoint_dir={RUNTIME_CONFIG['checkpoint_dir']}")
+    print(f"[{NODE_ID}] Watchdog: enabled={RUNTIME_CONFIG['watchdog_enabled']}, check_interval={RUNTIME_CONFIG['watchdog_check_interval']}s")
+    if HE_ENABLED:
+        print(f"[{NODE_ID}] HE Status: ENABLED, will validate context consistency")
+    print(f"[{NODE_ID}] ================================================")
+    
+    # Step 0: Validate HE context consistency (if enabled)
+    if HE_ENABLED:
+        if not validate_he_context_consistency():
+            print(f"[{NODE_ID}] HE context validation failed. Exiting.")
+            return
+    
+    # Step 0b: Authenticate
     if not authenticate():
         print(f"[{NODE_ID}] Cannot proceed without authentication. Shutting down.")
         return
@@ -506,15 +733,27 @@ def train_and_send():
     heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
     heartbeat_thread.start()
     
+    # Step 2b: Start watchdog monitor thread (for physical device auto-recovery)
+    if RUNTIME_CONFIG["watchdog_enabled"]:
+        watchdog_thread = threading.Thread(target=watchdog_monitor, daemon=True)
+        watchdog_thread.start()
+    
     # Step 3: Initialize model and data
     print(f"[{NODE_ID}] Initializing model and downloading dataset...")
     model = MNISTModel()
+    
+    # Try to restore model from cache if available (useful for restart recovery)
+    load_model_cache(model)
+    
     dataloader = get_data_loader()
     criterion = nn.CrossEntropyLoss()
     
     last_trained_round = -1
 
     while not _shutdown_flag.is_set():
+        # Record that we're alive (for watchdog monitoring)
+        record_heartbeat()
+        
         # 1. Fetch the latest global model
         report_activity("DOWNLOADING", "Fetching global model")
         current_round, global_weights, round_hparams = fetch_global_model()
@@ -687,6 +926,10 @@ def train_and_send():
         # 5. Track state and delay to observe the rounds progressing cleanly
         last_trained_round = current_round
         
+        # Save model checkpoint and cache for recovery (physical device resilience)
+        save_model_checkpoint(model, current_round)
+        save_model_cache(model)
+        
         round_duration = time.time() - round_start_time
         FL_ROUND_DURATION.labels(nodeId=NODE_ID).set(round_duration)
         
@@ -720,3 +963,8 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "nodeId": NODE_ID, "shutdown": _shutdown_flag.is_set()}
+
+if __name__ == "__main__":
+    import uvicorn
+    print(f"[{NODE_ID}] Starting FastAPI server on port 8000 for Prometheus metrics and health checks...")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

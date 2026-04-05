@@ -1,0 +1,6 @@
+{
+  "model_cache_dir": "/var/cache/fl-node/models",
+  "checkpoint_dir": "/var/cache/fl-node/checkpoints",
+  "watchdog_enabled": true,
+  "watchdog_check_interval": 30
+}
