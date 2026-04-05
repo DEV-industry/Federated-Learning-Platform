@@ -6,6 +6,7 @@ import sys
 import socket
 import random
 import base64
+import platform
 from urllib.parse import urlparse
 import torch
 import torch.nn as nn
@@ -21,7 +22,7 @@ from prometheus_client import Gauge, Counter
 import os
 import he_manager
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption, load_pem_private_key
 
 app = FastAPI()
 
@@ -113,8 +114,61 @@ HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "20"))
 ACTIVITY_URL = f"{AGGREGATOR_BASE_URL}/api/nodes/activity"
 ACTIVITY_REPORT_BATCH_INTERVAL = int(os.getenv("ACTIVITY_REPORT_BATCH_INTERVAL", "100"))
 AUTH_RECOVERY_LOCK = threading.Lock()
+NODE_PRIVATE_KEY_PATH = os.getenv("NODE_PRIVATE_KEY_PATH", "/app/node_identity_ed25519.pem").strip()
+NODE_ENROLLMENT_TOKEN = os.getenv("NODE_ENROLLMENT_TOKEN", "").strip()
+CLIENT_VERSION = os.getenv("CLIENT_VERSION", "node-client-1.0.0").strip()
+DEVICE_MODEL = os.getenv("DEVICE_MODEL", "").strip()
+DEVICE_OS = os.getenv("DEVICE_OS", platform.platform()).strip()
+DEVICE_CPU = os.getenv("DEVICE_CPU", platform.processor()).strip()
+DEVICE_GPU = os.getenv("DEVICE_GPU", "").strip()
+DEVICE_REGION = os.getenv("DEVICE_REGION", "").strip()
 
-NODE_PRIVATE_KEY = Ed25519PrivateKey.generate()
+def load_or_create_node_private_key():
+    if not NODE_PRIVATE_KEY_PATH:
+        print(f"[{NODE_ID}] NODE_PRIVATE_KEY_PATH is empty, using ephemeral identity key.")
+        return Ed25519PrivateKey.generate()
+
+    if os.path.exists(NODE_PRIVATE_KEY_PATH):
+        try:
+            with open(NODE_PRIVATE_KEY_PATH, "rb") as key_file:
+                loaded_key = load_pem_private_key(key_file.read(), password=None)
+            if not isinstance(loaded_key, Ed25519PrivateKey):
+                raise ValueError("Loaded key is not Ed25519")
+            print(f"[{NODE_ID}] Loaded persistent node identity key from {NODE_PRIVATE_KEY_PATH}")
+            return loaded_key
+        except Exception as e:
+            print(f"FATAL ERROR: [{NODE_ID}] Failed to load node private key from {NODE_PRIVATE_KEY_PATH}: {e}")
+            sys.exit(1)
+
+    try:
+        key_dir = os.path.dirname(NODE_PRIVATE_KEY_PATH)
+        if key_dir:
+            os.makedirs(key_dir, exist_ok=True)
+
+        generated_key = Ed25519PrivateKey.generate()
+        pem_bytes = generated_key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.PKCS8,
+            encryption_algorithm=NoEncryption()
+        )
+
+        with open(NODE_PRIVATE_KEY_PATH, "wb") as key_file:
+            key_file.write(pem_bytes)
+
+        try:
+            os.chmod(NODE_PRIVATE_KEY_PATH, 0o600)
+        except Exception:
+            # Best effort only (Windows may ignore chmod semantics).
+            pass
+
+        print(f"[{NODE_ID}] Generated persistent node identity key at {NODE_PRIVATE_KEY_PATH}")
+        return generated_key
+    except Exception as e:
+        print(f"FATAL ERROR: [{NODE_ID}] Failed to create node private key at {NODE_PRIVATE_KEY_PATH}: {e}")
+        sys.exit(1)
+
+
+NODE_PRIVATE_KEY = load_or_create_node_private_key()
 NODE_PUBLIC_KEY_B64 = base64.b64encode(
     NODE_PRIVATE_KEY.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
 ).decode("ascii")
@@ -180,7 +234,14 @@ def authenticate(max_retries=60, retry_delay=5):
                 "nodeId": NODE_ID,
                 "hostname": hostname,
                 "publicKey": NODE_PUBLIC_KEY_B64,
-                "signature": build_auth_signature()
+                "signature": build_auth_signature(),
+                "enrollmentToken": NODE_ENROLLMENT_TOKEN,
+                "clientVersion": CLIENT_VERSION,
+                "deviceModel": DEVICE_MODEL,
+                "deviceOs": DEVICE_OS,
+                "deviceCpu": DEVICE_CPU,
+                "deviceGpu": DEVICE_GPU,
+                "deviceRegion": DEVICE_REGION
             }, timeout=10, verify=REQUESTS_VERIFY_ARG)
             if response.status_code == 200:
                 JWT_TOKEN = response.json().get("token")
@@ -643,6 +704,8 @@ def startup_event():
     print(f"  Endpoint mode: {NODE_ENDPOINT_MODE}")
     print(f"  Aggregator: {AGGREGATOR_BASE_URL}")
     print(f"  Aggregator gRPC: {AGGREGATOR_GRPC_URL}")
+    print(f"  Client version: {CLIENT_VERSION}")
+    print(f"  Node key path: {NODE_PRIVATE_KEY_PATH if NODE_PRIVATE_KEY_PATH else 'ephemeral'}")
     print(f"  DP Enabled (default): {DP_ENABLED_DEFAULT}")
     print(f"  HE Enabled: {HE_ENABLED}")
     print(f"  FedProx μ (default): {FEDPROX_MU_DEFAULT}")

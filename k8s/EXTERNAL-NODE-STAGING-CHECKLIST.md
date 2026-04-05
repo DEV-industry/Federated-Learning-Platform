@@ -44,9 +44,18 @@ AGGREGATOR_EXTERNAL_BASE_URL=https://api.fl.local
 AGGREGATOR_EXTERNAL_GRPC_URL=grpc.fl.local:9443
 TLS_VERIFY=true
 TLS_CA_CERT_PATH=/path/to/ca.crt
+NODE_PRIVATE_KEY_PATH=/var/lib/fl-node/node_identity_ed25519.pem
+NODE_ENROLLMENT_TOKEN=<first-join-enrollment-token>
 DP_ENABLED=true
 HE_ENABLED=true
 HE_SHARED_CONTEXT_FILE=/path/to/shared_he_context_private.b64
+```
+
+Optional strict onboarding mode on aggregator:
+
+```bash
+FL_SECURITY_ENROLLMENT_REQUIRED_FOR_NEW_NODES=true
+FL_SECURITY_ENROLLMENT_TOKEN=<first-join-enrollment-token>
 ```
 
 ## 4. First join sequence
@@ -54,6 +63,7 @@ HE_SHARED_CONTEXT_FILE=/path/to/shared_he_context_private.b64
 Expected order on device logs:
 
 1. Auth success (`/api/auth`) and JWT received.
+1.1. First-time node accepted only with valid enrollment token (if strict onboarding enabled).
 2. Register success (`/api/nodes/register`).
 3. Heartbeat loop starts (`/api/nodes/heartbeat`).
 4. Global model fetch over gRPC (`GetGlobalModel`).

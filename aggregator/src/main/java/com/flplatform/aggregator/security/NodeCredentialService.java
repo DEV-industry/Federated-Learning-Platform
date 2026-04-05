@@ -2,6 +2,7 @@ package com.flplatform.aggregator.security;
 
 import com.flplatform.aggregator.RegisteredNodeEntity;
 import com.flplatform.aggregator.RegisteredNodeRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,12 +22,29 @@ public class NodeCredentialService {
 
     private final RegisteredNodeRepository registeredNodeRepository;
 
+    @Value("${fl.security.enrollment-required-for-new-nodes:false}")
+    private boolean enrollmentRequiredForNewNodes;
+
+    @Value("${fl.security.enrollment-token:}")
+    private String configuredEnrollmentToken;
+
     public NodeCredentialService(RegisteredNodeRepository registeredNodeRepository) {
         this.registeredNodeRepository = registeredNodeRepository;
     }
 
     @Transactional
-    public RegisteredNodeEntity authenticateNode(String nodeId, String hostname, String publicKeyBase64, String signatureBase64) {
+    public RegisteredNodeEntity authenticateNode(
+            String nodeId,
+            String hostname,
+            String publicKeyBase64,
+            String signatureBase64,
+            String enrollmentToken,
+            String clientVersion,
+            String deviceModel,
+            String deviceOs,
+            String deviceCpu,
+            String deviceGpu,
+            String deviceRegion) {
         String normalizedNodeId = requireText(nodeId, "nodeId");
         String normalizedHostname = hostname == null || hostname.isBlank() ? "unknown" : hostname.trim();
         String normalizedPublicKey = requireText(publicKeyBase64, "publicKey");
@@ -35,8 +53,23 @@ public class NodeCredentialService {
         PublicKey publicKey = decodePublicKey(normalizedPublicKey);
         verifySignature(publicKey, normalizedSignature, AUTH_MESSAGE_PREFIX + normalizedNodeId);
 
-        RegisteredNodeEntity node = registeredNodeRepository.findByNodeId(normalizedNodeId)
-                .orElseGet(() -> new RegisteredNodeEntity(normalizedNodeId, normalizedHostname));
+        RegisteredNodeEntity node = registeredNodeRepository.findByNodeId(normalizedNodeId).orElse(null);
+        boolean isNewNode = node == null;
+
+        if (isNewNode && enrollmentRequiredForNewNodes) {
+            if (configuredEnrollmentToken == null || configuredEnrollmentToken.isBlank()) {
+                throw new SecurityException("Enrollment is required for new nodes, but FL_SECURITY_ENROLLMENT_TOKEN is not configured");
+            }
+
+            if (enrollmentToken == null || enrollmentToken.isBlank() || !configuredEnrollmentToken.equals(enrollmentToken.trim())) {
+                throw new SecurityException("Invalid enrollment token for first-time node registration");
+            }
+        }
+
+        if (node == null) {
+            node = new RegisteredNodeEntity(normalizedNodeId, normalizedHostname);
+            node.setEnrolledAt(LocalDateTime.now());
+        }
 
         if (node.getPublicKey() != null && !node.getPublicKey().isBlank() && !node.getPublicKey().equals(normalizedPublicKey)) {
             throw new SecurityException("publicKey does not match the registered node key");
@@ -46,6 +79,12 @@ public class NodeCredentialService {
         node.setPublicKey(normalizedPublicKey);
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         node.setLastHeartbeat(LocalDateTime.now());
+        node.setClientVersion(normalizeOptional(clientVersion, 64));
+        node.setDeviceModel(normalizeOptional(deviceModel, 128));
+        node.setDeviceOs(normalizeOptional(deviceOs, 128));
+        node.setDeviceCpu(normalizeOptional(deviceCpu, 128));
+        node.setDeviceGpu(normalizeOptional(deviceGpu, 128));
+        node.setDeviceRegion(normalizeOptional(deviceRegion, 64));
         return registeredNodeRepository.save(node);
     }
 
@@ -118,6 +157,19 @@ public class NodeCredentialService {
             throw new IllegalArgumentException(fieldName + " is required");
         }
         return value.trim();
+    }
+
+    private String normalizeOptional(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength);
     }
 
     private PublicKey decodePublicKey(String publicKeyBase64) {

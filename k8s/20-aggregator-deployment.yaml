@@ -159,6 +159,16 @@ spec:
                 secretKeyRef:
                   name: fl-secrets
                   key: RABBITMQ_DEFAULT_PASS
+            - name: FL_SECURITY_ENROLLMENT_REQUIRED_FOR_NEW_NODES
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: FL_SECURITY_ENROLLMENT_REQUIRED_FOR_NEW_NODES
+            - name: FL_SECURITY_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fl-secrets
+                  key: FL_SECURITY_ENROLLMENT_TOKEN
           envFrom:
             - configMapRef:
                 name: fl-config

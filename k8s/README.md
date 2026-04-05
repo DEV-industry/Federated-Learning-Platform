@@ -26,12 +26,21 @@ AGGREGATOR_EXTERNAL_BASE_URL=https://api.fl.local
 AGGREGATOR_EXTERNAL_GRPC_URL=grpc.fl.local:9443
 TLS_VERIFY=true
 TLS_CA_CERT_PATH=/path/to/ca.crt
+NODE_PRIVATE_KEY_PATH=/var/lib/fl-node/node_identity_ed25519.pem
+NODE_ENROLLMENT_TOKEN=<first-join-enrollment-token>
 ```
 
 For in-cluster pod nodes keep:
 
 ```bash
 NODE_ENDPOINT_MODE=internal
+```
+
+If you want strict first-time onboarding for new nodes, enable on aggregator:
+
+```bash
+FL_SECURITY_ENROLLMENT_REQUIRED_FOR_NEW_NODES=true
+FL_SECURITY_ENROLLMENT_TOKEN=<same-token-distributed-to-approved-devices>
 ```
 
 ---

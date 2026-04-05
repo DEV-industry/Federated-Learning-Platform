@@ -24,6 +24,13 @@ public class AuthController {
         String hostname = payload.getOrDefault("hostname", "unknown");
         String publicKey = payload.get("publicKey");
         String signature = payload.get("signature");
+        String enrollmentToken = payload.get("enrollmentToken");
+        String clientVersion = payload.get("clientVersion");
+        String deviceModel = payload.get("deviceModel");
+        String deviceOs = payload.get("deviceOs");
+        String deviceCpu = payload.get("deviceCpu");
+        String deviceGpu = payload.get("deviceGpu");
+        String deviceRegion = payload.get("deviceRegion");
 
         if (nodeId == null || nodeId.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -49,7 +56,18 @@ public class AuthController {
         int authVersion;
         try {
             authVersion = nodeCredentialService
-                    .authenticateNode(nodeId, hostname, publicKey, signature)
+                    .authenticateNode(
+                        nodeId,
+                        hostname,
+                        publicKey,
+                        signature,
+                        enrollmentToken,
+                        clientVersion,
+                        deviceModel,
+                        deviceOs,
+                        deviceCpu,
+                        deviceGpu,
+                        deviceRegion)
                     .getAuthVersion();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of(

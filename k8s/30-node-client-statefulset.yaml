@@ -80,6 +80,21 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: AGGREGATOR_GRPC_URL
+            - name: AGGREGATOR_EXTERNAL_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: AGGREGATOR_EXTERNAL_BASE_URL
+            - name: AGGREGATOR_EXTERNAL_GRPC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: AGGREGATOR_EXTERNAL_GRPC_URL
+            - name: NODE_ENDPOINT_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: NODE_ENDPOINT_MODE
             - name: TLS_VERIFY
               valueFrom:
                 configMapKeyRef:
@@ -90,6 +105,19 @@ spec:
                 configMapKeyRef:
                   name: fl-config
                   key: TLS_CA_CERT_PATH
+            - name: CLIENT_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: fl-config
+                  key: CLIENT_VERSION
+            - name: NODE_PRIVATE_KEY_PATH
+              value: "/tmp/node_identity_ed25519.pem"
+            - name: NODE_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: fl-secrets
+                  key: FL_SECURITY_ENROLLMENT_TOKEN
+                  optional: true
           volumeMounts:
             - name: aggregator-ca-cert
               mountPath: /certs
