@@ -114,6 +114,12 @@ WATCHDOG_ENABLED = os.getenv("WATCHDOG_ENABLED", "true").lower() == "true"
 WATCHDOG_CHECK_INTERVAL = int(os.getenv("WATCHDOG_CHECK_INTERVAL", "30"))
 CONFIG_PRIORITY_ENV_FIRST = True  # Environment variables override config file
 
+# Dynamic identity: must be set from environment (e.g., downward API in K8s)
+NODE_ID = os.getenv("NODE_ID")
+if not NODE_ID:
+    print("FATAL ERROR: NODE_ID environment variable is missing. It must be provided.")
+    sys.exit(1)
+
 def load_device_runtime_config():
     """Load device runtime config from JSON file.
     Priority: env vars > config file > defaults
@@ -155,12 +161,6 @@ def load_device_runtime_config():
     return config
 
 RUNTIME_CONFIG = load_device_runtime_config()
-
-# Dynamic identity: must be set from environment (e.g., downward API in K8s)
-NODE_ID = os.getenv("NODE_ID")
-if not NODE_ID:
-    print("FATAL ERROR: NODE_ID environment variable is missing. It must be provided.")
-    sys.exit(1)
 
 DP_ENABLED_DEFAULT = os.getenv("DP_ENABLED", "false").lower() == "true"
 DP_NOISE_MULTIPLIER_DEFAULT = float(os.getenv("DP_NOISE_MULTIPLIER", "0.01"))
