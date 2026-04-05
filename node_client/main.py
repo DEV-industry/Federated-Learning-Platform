@@ -36,8 +36,22 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 # CONFIGURATION — K8s-native with Docker-compatible defaults
 # =========================================================================
 
-AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "https://aggregator:8443")
-AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_GRPC_URL", "aggregator:9443")
+INTERNAL_AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_BASE_URL", "https://aggregator:8443")
+INTERNAL_AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_GRPC_URL", "aggregator:9443")
+EXTERNAL_AGGREGATOR_BASE_URL = os.getenv("AGGREGATOR_EXTERNAL_BASE_URL", "").strip()
+EXTERNAL_AGGREGATOR_GRPC_URL = os.getenv("AGGREGATOR_EXTERNAL_GRPC_URL", "").strip()
+NODE_ENDPOINT_MODE = os.getenv("NODE_ENDPOINT_MODE", "internal").strip().lower()
+
+if NODE_ENDPOINT_MODE == "external":
+    AGGREGATOR_BASE_URL = EXTERNAL_AGGREGATOR_BASE_URL or INTERNAL_AGGREGATOR_BASE_URL
+    AGGREGATOR_GRPC_URL = EXTERNAL_AGGREGATOR_GRPC_URL or INTERNAL_AGGREGATOR_GRPC_URL
+elif NODE_ENDPOINT_MODE == "internal":
+    AGGREGATOR_BASE_URL = INTERNAL_AGGREGATOR_BASE_URL
+    AGGREGATOR_GRPC_URL = INTERNAL_AGGREGATOR_GRPC_URL
+else:
+    print(f"FATAL ERROR: Unsupported NODE_ENDPOINT_MODE='{NODE_ENDPOINT_MODE}'. Use 'internal' or 'external'.")
+    sys.exit(1)
+
 TLS_VERIFY = os.getenv("TLS_VERIFY", "true").lower() == "true"
 TLS_CA_CERT_PATH = os.getenv("TLS_CA_CERT_PATH", "")
 GRPC_SSL_TARGET_NAME_OVERRIDE = os.getenv("GRPC_SSL_TARGET_NAME_OVERRIDE", "")
@@ -626,7 +640,9 @@ def train_and_send():
 @app.on_event("startup")
 def startup_event():
     print(f"Starting Federated Learning Node: {NODE_ID}")
+    print(f"  Endpoint mode: {NODE_ENDPOINT_MODE}")
     print(f"  Aggregator: {AGGREGATOR_BASE_URL}")
+    print(f"  Aggregator gRPC: {AGGREGATOR_GRPC_URL}")
     print(f"  DP Enabled (default): {DP_ENABLED_DEFAULT}")
     print(f"  HE Enabled: {HE_ENABLED}")
     print(f"  FedProx μ (default): {FEDPROX_MU_DEFAULT}")

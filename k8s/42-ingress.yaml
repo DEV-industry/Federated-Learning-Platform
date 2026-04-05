@@ -21,6 +21,9 @@ spec:
     - hosts:
         - fl.local
       secretName: fl-ingress-tls
+    - hosts:
+        - api.fl.local
+      secretName: fl-ingress-tls
   rules:
     - host: fl.local
       http:
@@ -55,3 +58,27 @@ spec:
                 name: fl-frontend
                 port:
                   number: 3000
+    - host: api.fl.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: fl-aggregator
+                port:
+                  number: 8443
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: fl-aggregator
+                port:
+                  number: 8443
+          - path: /ws-sockjs
+            pathType: Prefix
+            backend:
+              service:
+                name: fl-aggregator
+                port:
+                  number: 8443

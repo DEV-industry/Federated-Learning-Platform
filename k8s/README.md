@@ -2,6 +2,38 @@
 
 This guide covers deploying the FL Platform on a local Minikube cluster. The same manifests work on any K8s cluster (GKE, EKS, AKS) with minor registry changes.
 
+## External Physical Node Pilot (Staging)
+
+The manifests in this folder now support a staged rollout where:
+
+- Internal pod-based nodes keep using in-cluster DNS endpoints.
+- External physical devices use public endpoints for REST and gRPC.
+
+New resources and settings for this mode:
+
+- `k8s/22-aggregator-grpc-external-service.yaml` (gRPC `LoadBalancer` service)
+- `k8s/42-ingress.yaml` host `api.fl.local` for HTTPS REST + WebSocket
+- `k8s/02-configmap.yaml` keys:
+  - `AGGREGATOR_EXTERNAL_BASE_URL`
+  - `AGGREGATOR_EXTERNAL_GRPC_URL`
+  - `NODE_ENDPOINT_MODE`
+
+For physical devices set:
+
+```bash
+NODE_ENDPOINT_MODE=external
+AGGREGATOR_EXTERNAL_BASE_URL=https://api.fl.local
+AGGREGATOR_EXTERNAL_GRPC_URL=grpc.fl.local:9443
+TLS_VERIFY=true
+TLS_CA_CERT_PATH=/path/to/ca.crt
+```
+
+For in-cluster pod nodes keep:
+
+```bash
+NODE_ENDPOINT_MODE=internal
+```
+
 ---
 
 ## Prerequisites
@@ -105,6 +137,9 @@ kubectl wait --for=condition=ready pod -l app=fl-postgres -n fl-platform --timeo
 kubectl apply -f k8s/20-aggregator-deployment.yaml
 kubectl apply -f k8s/21-aggregator-service.yaml
 
+# Optional but required for external physical devices (public gRPC endpoint)
+kubectl apply -f k8s/22-aggregator-grpc-external-service.yaml
+
 # Wait for Aggregator to be ready
 kubectl wait --for=condition=ready pod -l app=fl-aggregator -n fl-platform --timeout=180s
 
@@ -192,6 +227,9 @@ minikube tunnel
 
 # Open in browser:
 # http://fl.local
+
+# For external API testing host:
+# https://api.fl.local
 ```
 
 ---
