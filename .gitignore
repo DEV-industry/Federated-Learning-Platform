@@ -42,6 +42,7 @@ k8s/*secret*.yaml
 
 # Environment Variables
 .env
+shared_he_context_private.b64
 
 # TLS certificates / private keys
 certs/*.key
