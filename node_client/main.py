@@ -9,6 +9,11 @@ import base64
 import platform
 import json
 import psutil
+import asyncio
+import datetime
+import logging
+from dataclasses import dataclass, field
+from typing import List, Dict, Any
 from urllib.parse import urlparse
 import torch
 import torch.nn as nn
@@ -18,7 +23,10 @@ from torch.utils.data import DataLoader, Subset
 import grpc
 import federated_pb2
 import federated_pb2_grpc
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Gauge, Counter
 import os
@@ -34,6 +42,124 @@ MODELS_REJECTED = Counter('fl_models_rejected_total', 'Total number of models re
 
 # Instrument app and expose /metrics endpoint
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+# =========================================================================
+# LOCAL UI CONFIGURATION
+# =========================================================================
+ENABLE_LOCAL_UI = os.getenv("ENABLE_LOCAL_UI", "false").lower() == "true"
+LOCAL_UI_PORT = int(os.getenv("LOCAL_UI_PORT", "8080"))
+
+# =========================================================================
+# NODE TELEMETRY — In-memory store for the local dashboard
+# =========================================================================
+
+@dataclass
+class NodeTelemetry:
+    """Thread-safe in-memory telemetry store for the local UI dashboard."""
+    node_id: str = ""
+    status: str = "initializing"
+    current_round: int = 0
+    he_enabled: bool = False
+    dp_enabled: bool = False
+    loss_history: List[Dict[str, Any]] = field(default_factory=list)
+    accuracy_history: List[Dict[str, Any]] = field(default_factory=list)
+    cpu_percent: float = 0.0
+    ram_percent: float = 0.0
+    ram_used_mb: float = 0.0
+    ram_total_mb: float = 0.0
+    logs: List[Dict[str, str]] = field(default_factory=list)
+    uptime_seconds: float = 0.0
+    start_time: float = field(default_factory=time.time)
+    last_round_duration: float = 0.0
+    fedprox_mu: float = 0.0
+    dp_noise_multiplier: float = 0.0
+    total_rounds_completed: int = 0
+    current_batch: int = 0
+    total_batches: int = 0
+
+_telemetry = NodeTelemetry()
+_telemetry_lock = threading.Lock()
+_ws_clients: List[WebSocket] = []
+_ws_clients_lock = threading.Lock()
+_MAX_LOG_ENTRIES = 500
+_ui_event_loop = None  # Set when UI server starts
+
+def _update_telemetry(**kwargs):
+    """Thread-safe update of telemetry fields."""
+    with _telemetry_lock:
+        for key, value in kwargs.items():
+            if hasattr(_telemetry, key):
+                setattr(_telemetry, key, value)
+
+def _append_log(level: str, message: str):
+    """Append a log entry to telemetry and broadcast to WebSocket clients."""
+    entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "level": level,
+        "message": message
+    }
+    with _telemetry_lock:
+        _telemetry.logs.append(entry)
+        if len(_telemetry.logs) > _MAX_LOG_ENTRIES:
+            _telemetry.logs = _telemetry.logs[-_MAX_LOG_ENTRIES:]
+    _broadcast_log_sync(entry)
+
+def _broadcast_log_sync(entry: dict):
+    """Queue a log broadcast to all connected WebSocket clients."""
+    if _ui_event_loop is None:
+        return
+    with _ws_clients_lock:
+        disconnected = []
+        for ws in _ws_clients:
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    ws.send_json(entry),
+                    _ui_event_loop
+                )
+            except Exception:
+                disconnected.append(ws)
+        for ws in disconnected:
+            _ws_clients.remove(ws)
+
+def _update_hardware_metrics():
+    """Snapshot current CPU and RAM usage."""
+    try:
+        cpu = psutil.cpu_percent(interval=0)
+        mem = psutil.virtual_memory()
+        _update_telemetry(
+            cpu_percent=cpu,
+            ram_percent=mem.percent,
+            ram_used_mb=round(mem.used / (1024 * 1024), 1),
+            ram_total_mb=round(mem.total / (1024 * 1024), 1),
+            uptime_seconds=round(time.time() - _telemetry.start_time, 1)
+        )
+    except Exception:
+        pass
+
+def _hardware_monitor_loop():
+    """Background thread that updates hardware metrics every 2 seconds."""
+    while not _shutdown_flag.is_set():
+        _update_hardware_metrics()
+        time.sleep(2)
+
+# Intercept print() to also feed the local dashboard log stream
+_original_print = print
+def _patched_print(*args, **kwargs):
+    _original_print(*args, **kwargs)
+    message = " ".join(str(a) for a in args)
+    level = "INFO"
+    msg_upper = message.upper()
+    if "ERROR" in msg_upper or "FATAL" in msg_upper:
+        level = "ERROR"
+    elif "WARNING" in msg_upper or "WARN" in msg_upper:
+        level = "WARN"
+    elif "SUCCESS" in msg_upper or "REGISTERED SUCCESSFULLY" in msg_upper or "AUTHENTICATED SUCCESSFULLY" in msg_upper:
+        level = "SUCCESS"
+    _append_log(level, message)
+
+if ENABLE_LOCAL_UI:
+    import builtins
+    builtins.print = _patched_print
 
 # =========================================================================
 # CONFIGURATION — K8s-native with Docker-compatible defaults
@@ -703,6 +829,15 @@ def get_data_loader():
 
 def train_and_send():
     """Main training loop for the Federated Learning client."""
+    # Initialize telemetry
+    _update_telemetry(
+        node_id=NODE_ID,
+        he_enabled=HE_ENABLED,
+        dp_enabled=DP_ENABLED_DEFAULT,
+        status="initializing",
+        fedprox_mu=FEDPROX_MU_DEFAULT,
+        dp_noise_multiplier=DP_NOISE_MULTIPLIER_DEFAULT
+    )
     
     print(f"[{NODE_ID}] ================================================")
     print(f"[{NODE_ID}] FL Node Client Starting (Device Runtime Layer)")
@@ -720,14 +855,19 @@ def train_and_send():
             return
     
     # Step 0b: Authenticate
+    _update_telemetry(status="connecting")
     if not authenticate():
         print(f"[{NODE_ID}] Cannot proceed without authentication. Shutting down.")
+        _update_telemetry(status="disconnected")
         return
         
     # Step 1: Register with aggregator (blocks until successful)
     if not register_with_aggregator():
         print(f"[{NODE_ID}] Cannot proceed without registration. Shutting down.")
+        _update_telemetry(status="disconnected")
         return
+    
+    _update_telemetry(status="connected")
     
     # Step 2: Start heartbeat background thread
     heartbeat_thread = threading.Thread(target=heartbeat_loop, daemon=True)
@@ -755,11 +895,18 @@ def train_and_send():
         record_heartbeat()
         
         # 1. Fetch the latest global model
+        _update_telemetry(status="waiting")
         report_activity("DOWNLOADING", "Fetching global model")
         current_round, global_weights, round_hparams = fetch_global_model()
         round_dp_enabled = round_hparams["dp_enabled"]
         round_fedprox_mu = round_hparams["fedprox_mu"]
         round_dp_noise = round_hparams["dp_noise_multiplier"]
+        _update_telemetry(
+            current_round=current_round,
+            dp_enabled=round_dp_enabled,
+            fedprox_mu=round_fedprox_mu,
+            dp_noise_multiplier=round_dp_noise
+        )
         print(
             f"[{NODE_ID}] Round {current_round} hyperparams from aggregator: "
             f"dp_enabled={round_dp_enabled}, fedprox_mu={round_fedprox_mu:.6f}, dp_noise_multiplier={round_dp_noise:.6f}"
@@ -772,6 +919,7 @@ def train_and_send():
             
         if current_round <= last_trained_round and current_round != 0:
             print(f"[{NODE_ID}] Round {current_round} already trained. Waiting for aggregator to advance to round {current_round + 1}...")
+            _update_telemetry(status="waiting")
             time.sleep(5)
             continue
 
@@ -798,6 +946,7 @@ def train_and_send():
 
         # 3. Train on local MNIST subset for 1 epoch
         report_activity("TRAINING", "Starting epoch")
+        _update_telemetry(status="training", total_batches=len(dataloader), current_batch=0)
         print(f"[{NODE_ID}] Starting local training (1 epoch)...")
         model.train()
         optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
@@ -820,6 +969,7 @@ def train_and_send():
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+            _update_telemetry(current_batch=batch_idx)
             
             if batch_idx % 150 == 0:
                 print(f"[{NODE_ID}] Batch {batch_idx}/{len(dataloader)}\tLoss: {loss.item():.4f}")
@@ -828,6 +978,17 @@ def train_and_send():
                 
         avg_loss = running_loss / len(dataloader)
         print(f"[{NODE_ID}] Finished epoch. Average Loss: {avg_loss:.4f}")
+        
+        # Record loss and accuracy in telemetry for local dashboard charts
+        with _telemetry_lock:
+            _telemetry.loss_history.append({
+                "round": current_round,
+                "loss": round(avg_loss, 6)
+            })
+            _telemetry.accuracy_history.append({
+                "round": current_round,
+                "accuracy": round(true_accuracy, 6)
+            })
 
         # 4. Flatten, compute update delta, apply DP, then send updated weights back to aggregator
         trained_weights_list = flatten_weights(model)
@@ -858,15 +1019,16 @@ def train_and_send():
         
         if HE_ENABLED:
             print(f"[{NODE_ID}] Encrypting weights via TenSEAL CKKS...")
+            _update_telemetry(status="encrypting")
             report_activity("ENCRYPTING", "Homomorphic encryption of weights")
             try:
                 encrypted_blob, pub_ctx_blob = he_manager.encrypt_weights(he_context, trained_weights)
             except Exception as e:
                 print(f"[{NODE_ID}] Failed to encrypt weights: {e}")
-                # Fallback to no HE if encryption crashes for some reason
                 pass
                 
         print(f"[{NODE_ID}] Sending updated weights to Aggregator via gRPC (Loss: {avg_loss:.4f})...")
+        _update_telemetry(status="uploading")
         report_activity("UPLOADING", f"Sending weights (Loss: {avg_loss:.4f})")
         submission_successful = False
         for attempt in range(5):
@@ -933,12 +1095,18 @@ def train_and_send():
         round_duration = time.time() - round_start_time
         FL_ROUND_DURATION.labels(nodeId=NODE_ID).set(round_duration)
         
+        _update_telemetry(
+            status="idle",
+            last_round_duration=round(round_duration, 2),
+            total_rounds_completed=last_trained_round
+        )
+        
         report_activity("IDLE", f"Completed round {current_round}")
         print("-" * 50)
         time.sleep(5)
 
 # =========================================================================
-# FASTAPI LIFECYCLE
+# FASTAPI LIFECYCLE — Prometheus/Health (port 8000)
 # =========================================================================
 
 @app.on_event("startup")
@@ -953,8 +1121,13 @@ def startup_event():
     print(f"  HE Enabled: {HE_ENABLED}")
     print(f"  FedProx μ (default): {FEDPROX_MU_DEFAULT}")
     print(f"  DP noise (default): {DP_NOISE_MULTIPLIER_DEFAULT}")
+    print(f"  Local UI: {'ENABLED on port ' + str(LOCAL_UI_PORT) if ENABLE_LOCAL_UI else 'DISABLED'}")
     thread = threading.Thread(target=train_and_send, daemon=True)
     thread.start()
+    
+    # Start hardware monitoring background thread
+    hw_thread = threading.Thread(target=_hardware_monitor_loop, daemon=True)
+    hw_thread.start()
 
 @app.get("/")
 def read_root():
@@ -964,7 +1137,122 @@ def read_root():
 def health_check():
     return {"status": "healthy", "nodeId": NODE_ID, "shutdown": _shutdown_flag.is_set()}
 
+# =========================================================================
+# LOCAL UI DASHBOARD — FastAPI app on port 8080 (conditional)
+# =========================================================================
+
+ui_app = FastAPI(title="FL Node Local Dashboard")
+ui_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@ui_app.get("/api/status")
+def ui_status():
+    """Full telemetry snapshot for the local dashboard."""
+    with _telemetry_lock:
+        return JSONResponse({
+            "nodeId": _telemetry.node_id or NODE_ID,
+            "status": _telemetry.status,
+            "currentRound": _telemetry.current_round,
+            "heEnabled": _telemetry.he_enabled,
+            "dpEnabled": _telemetry.dp_enabled,
+            "uptimeSeconds": round(time.time() - _telemetry.start_time, 1),
+            "lastRoundDuration": _telemetry.last_round_duration,
+            "totalRoundsCompleted": _telemetry.total_rounds_completed,
+            "fedproxMu": _telemetry.fedprox_mu,
+            "dpNoiseMultiplier": _telemetry.dp_noise_multiplier,
+            "currentBatch": _telemetry.current_batch,
+            "totalBatches": _telemetry.total_batches,
+        })
+
+@ui_app.get("/api/metrics")
+def ui_metrics():
+    """Training loss and accuracy history for chart rendering."""
+    with _telemetry_lock:
+        return JSONResponse({
+            "lossHistory": list(_telemetry.loss_history),
+            "accuracyHistory": list(_telemetry.accuracy_history),
+        })
+
+@ui_app.get("/api/hardware")
+def ui_hardware():
+    """Current CPU and RAM usage."""
+    _update_hardware_metrics()
+    with _telemetry_lock:
+        return JSONResponse({
+            "cpuPercent": _telemetry.cpu_percent,
+            "ramPercent": _telemetry.ram_percent,
+            "ramUsedMb": _telemetry.ram_used_mb,
+            "ramTotalMb": _telemetry.ram_total_mb,
+        })
+
+@ui_app.get("/api/logs")
+def ui_logs():
+    """Return buffered log entries (for initial page load)."""
+    with _telemetry_lock:
+        return JSONResponse(list(_telemetry.logs))
+
+@ui_app.websocket("/ws/logs")
+async def ws_logs(websocket: WebSocket):
+    """Real-time log streaming via WebSocket."""
+    await websocket.accept()
+    with _ws_clients_lock:
+        _ws_clients.append(websocket)
+    try:
+        # Send buffered logs on connect
+        with _telemetry_lock:
+            for entry in _telemetry.logs:
+                await websocket.send_json(entry)
+        # Keep alive — wait for client disconnect
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        with _ws_clients_lock:
+            if websocket in _ws_clients:
+                _ws_clients.remove(websocket)
+
+def _run_local_ui_server():
+    """Run the local UI server on a separate thread (port 8080)."""
+    global _ui_event_loop
+    import uvicorn
+    
+    # Mount the static Next.js export if available
+    ui_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "out")
+    if os.path.isdir(ui_static_dir):
+        # Serve static files, with index.html as the SPA fallback
+        ui_app.mount("/", StaticFiles(directory=ui_static_dir, html=True), name="static-ui")
+        print(f"[{NODE_ID}] Local UI static files mounted from {ui_static_dir}")
+    else:
+        @ui_app.get("/")
+        def ui_fallback():
+            return JSONResponse({
+                "error": "UI not built",
+                "message": "Run 'npm run build' in node_client/ui/ to generate the static dashboard.",
+                "api": "The API endpoints (/api/status, /api/metrics, /api/hardware) are still available."
+            })
+        print(f"[{NODE_ID}] WARNING: ui/out/ directory not found. Dashboard will show API-only fallback.")
+    
+    config = uvicorn.Config(ui_app, host="0.0.0.0", port=LOCAL_UI_PORT, log_level="warning")
+    server = uvicorn.Server(config)
+    _ui_event_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_ui_event_loop)
+    _ui_event_loop.run_until_complete(server.serve())
+
 if __name__ == "__main__":
     import uvicorn
+    
+    # Start local UI server if enabled
+    if ENABLE_LOCAL_UI:
+        ui_thread = threading.Thread(target=_run_local_ui_server, daemon=True)
+        ui_thread.start()
+        print(f"[{NODE_ID}] ✦ Local Dashboard: http://localhost:{LOCAL_UI_PORT}")
+    
     print(f"[{NODE_ID}] Starting FastAPI server on port 8000 for Prometheus metrics and health checks...")
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

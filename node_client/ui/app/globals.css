@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ──────────────────────────────────────────────
+   Node Dashboard — Dark Argon Design System
+   ────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --node-bg: #0a0d1a;
+  --node-bg-secondary: #0f1225;
+  --node-card: #141832;
+  --node-border: #1e2345;
+  --argon-primary: #5e72e4;
+  --argon-success: #2dce89;
+  --argon-danger: #f5365c;
+  --argon-warning: #fb6340;
+  --argon-info: #11cdef;
+}
+
+@layer base {
+  body {
+    @apply bg-node-bg text-node-text-primary antialiased;
+    font-feature-settings: "kern" 1;
+  }
+
+  /* Custom scrollbar — dark theme */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0f1225; }
+  ::-webkit-scrollbar-thumb { background: #2a2f55; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3f65; }
+}
+
+/* ──────────────────────────────────────────────
+   Dark Card Shell
+   ────────────────────────────────────────────── */
+
+@layer components {
+  .node-card {
+    @apply bg-node-card border border-node-border rounded-node-lg;
+    box-shadow: 0 0 30px 0 rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+  }
+
+  .node-card-header {
+    @apply px-6 py-4 border-b border-node-border flex items-center justify-between;
+  }
+
+  .node-card-body {
+    @apply p-6;
+  }
+
+  /* Glassmorphism variant */
+  .node-glass {
+    @apply bg-node-card/70 border border-node-border rounded-node-lg;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+
+  /* Badge variants */
+  .node-badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider;
+  }
+
+  .node-badge-success {
+    @apply bg-argon-success/15 text-argon-success border border-argon-success/25;
+  }
+
+  .node-badge-danger {
+    @apply bg-argon-danger/15 text-argon-danger border border-argon-danger/25;
+  }
+
+  .node-badge-warning {
+    @apply bg-argon-warning/15 text-argon-warning border border-argon-warning/25;
+  }
+
+  .node-badge-info {
+    @apply bg-argon-info/15 text-argon-info border border-argon-info/25;
+  }
+
+  .node-badge-primary {
+    @apply bg-argon-primary/15 text-argon-primary border border-argon-primary/25;
+  }
+
+  /* Icon badge (circular gradient) */
+  .node-icon-badge {
+    @apply w-11 h-11 rounded-xl flex items-center justify-center text-white;
+  }
+}
+
+/* ──────────────────────────────────────────────
+   Terminal Styling
+   ────────────────────────────────────────────── */
+
+.terminal-scroll::-webkit-scrollbar { width: 5px; }
+.terminal-scroll::-webkit-scrollbar-track { background: #0a0d15; }
+.terminal-scroll::-webkit-scrollbar-thumb { background: #1e2345; border-radius: 9999px; }
+.terminal-scroll::-webkit-scrollbar-thumb:hover { background: #2a2f55; }
+
+/* ──────────────────────────────────────────────
+   Animations
+   ────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(94, 114, 228, 0.08), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes gauge-fill {
+  from { stroke-dashoffset: 251.2; }
+}
+
+/* Grid pattern background */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(94, 114, 228, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 114, 228, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}

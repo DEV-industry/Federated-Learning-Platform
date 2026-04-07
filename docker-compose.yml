@@ -151,6 +151,7 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
+      - ENABLE_LOCAL_UI=false
     volumes:
       - ./certs:/certs:ro
     depends_on:
@@ -176,6 +177,7 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
+      - ENABLE_LOCAL_UI=false
     volumes:
       - ./certs:/certs:ro
     depends_on:
@@ -201,6 +203,7 @@ services:
       - DATA_PARTITION_FRACTION=0.3
       - DP_NOISE_MULTIPLIER=0.01
       - FEDPROX_MU=${FEDPROX_MU}
+      - ENABLE_LOCAL_UI=false
     volumes:
       - ./certs:/certs:ro
     depends_on:

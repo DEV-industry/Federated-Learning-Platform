@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Next.js build cache (NOT the static export — we commit out/)
+.next/
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts
