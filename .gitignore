@@ -54,3 +54,4 @@ certs/*.ext
 certs/*.p12
 certs/*.jks
 
+docker-compose-laptop.yml
