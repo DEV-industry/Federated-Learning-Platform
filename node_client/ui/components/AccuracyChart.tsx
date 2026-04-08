@@ -11,8 +11,8 @@ interface AccuracyChartProps {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="node-glass px-3 py-2 rounded-lg border border-node-border-light shadow-xl">
-      <p className="text-[0.65rem] font-bold text-node-text-muted uppercase mb-1">Round {label}</p>
+    <div className="bg-white px-3 py-2 rounded-lg shadow-[0_0_2rem_0_rgba(136,152,170,0.15)]">
+      <p className="text-[0.65rem] font-bold text-argon-muted uppercase mb-1">Round {label}</p>
       <p className="text-sm font-bold text-argon-success">{(payload[0].value * 100).toFixed(2)}%</p>
     </div>
   );
@@ -20,32 +20,32 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function AccuracyChart({ data }: AccuracyChartProps) {
   return (
-    <div className="node-card animate-slide-up">
-      <div className="node-card-header">
+    <div className="argon-card">
+      <div className="argon-card-header">
         <div className="flex items-center gap-3">
-          <div className="node-icon-badge bg-gradient-to-br from-argon-success to-[#2dceb1] shadow-md shadow-argon-success/20">
+          <div className="argon-icon-badge bg-gradient-to-br from-argon-success to-[#2dceb1]">
             <TrendingUp className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-node-text-primary">Model Accuracy</h3>
-            <p className="text-[0.65rem] text-node-text-muted mt-0.5">Model evaluation on your private local dataset</p>
+            <h3 className="text-sm font-bold text-argon-default">Model Accuracy</h3>
+            <p className="text-[0.65rem] text-argon-muted mt-0.5">Model evaluation on your private local dataset</p>
           </div>
         </div>
         {data.length > 0 && (
           <div className="text-right">
             <p className="text-lg font-bold text-argon-success">{(data[data.length - 1].accuracy * 100).toFixed(1)}%</p>
-            <p className="text-[0.6rem] text-node-text-muted uppercase">Latest</p>
+            <p className="text-[0.6rem] text-argon-muted uppercase">Latest</p>
           </div>
         )}
       </div>
-      <div className="node-card-body">
+      <div className="argon-card-body">
         {data.length === 0 ? (
           <div className="h-[200px] flex items-center justify-center">
             <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-node-border/50 flex items-center justify-center mx-auto mb-3 animate-pulse">
-                <TrendingUp className="w-5 h-5 text-node-text-muted" />
+              <div className="w-12 h-12 rounded-full bg-argon-lighter flex items-center justify-center mx-auto mb-3 animate-pulse">
+                <TrendingUp className="w-5 h-5 text-argon-muted" />
               </div>
-              <p className="text-xs text-node-text-muted">Waiting for training data...</p>
+              <p className="text-xs text-argon-muted">Waiting for training data...</p>
             </div>
           </div>
         ) : (
@@ -57,15 +57,15 @@ export default function AccuracyChart({ data }: AccuracyChartProps) {
                   <stop offset="95%" stopColor="#2dce89" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e2345" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e9ecef" vertical={false} />
               <XAxis
                 dataKey="round"
-                tick={{ fill: "#64748b", fontSize: 10 }}
-                axisLine={{ stroke: "#1e2345" }}
+                tick={{ fill: "#8898aa", fontSize: 10 }}
+                axisLine={{ stroke: "#e9ecef" }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: "#64748b", fontSize: 10 }}
+                tick={{ fill: "#8898aa", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 domain={[0, 1]}
@@ -79,7 +79,7 @@ export default function AccuracyChart({ data }: AccuracyChartProps) {
                 strokeWidth={2}
                 fill="url(#accuracyGradient)"
                 dot={false}
-                activeDot={{ r: 4, fill: "#2dce89", stroke: "#0a0d1a", strokeWidth: 2 }}
+                activeDot={{ r: 4, fill: "#2dce89", stroke: "#ffffff", strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>

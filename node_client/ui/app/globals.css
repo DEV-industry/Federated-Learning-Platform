@@ -3,125 +3,159 @@
 @tailwind utilities;
 
 /* ──────────────────────────────────────────────
-   Node Dashboard — Dark Argon Design System
+   Argon Dashboard Design System — Global Tokens
    ────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 :root {
-  --node-bg: #0a0d1a;
-  --node-bg-secondary: #0f1225;
-  --node-card: #141832;
-  --node-border: #1e2345;
   --argon-primary: #5e72e4;
+  --argon-primary-dark: #4454c3;
   --argon-success: #2dce89;
   --argon-danger: #f5365c;
   --argon-warning: #fb6340;
   --argon-info: #11cdef;
+  --argon-default: #172b4d;
+  --argon-muted: #8898aa;
+  --argon-light: #adb5bd;
+  --argon-lighter: #e9ecef;
+  --argon-bg: #f8f9fe;
+  --argon-card-bg: #ffffff;
+  --argon-card-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.15);
+  --argon-card-radius: 0.375rem;
 }
 
 @layer base {
   body {
-    @apply bg-node-bg text-node-text-primary antialiased;
+    @apply bg-argon-bg text-argon-default antialiased;
     font-feature-settings: "kern" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom scrollbar — dark theme */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #0f1225; }
-  ::-webkit-scrollbar-thumb { background: #2a2f55; border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background: #3a3f65; }
+  /* --- Scrollbar --- */
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 9999px;
+  }
 }
 
 /* ──────────────────────────────────────────────
-   Dark Card Shell
+   Argon Card Shell
    ────────────────────────────────────────────── */
 
 @layer components {
-  .node-card {
-    @apply bg-node-card border border-node-border rounded-node-lg;
-    box-shadow: 0 0 30px 0 rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
+  .argon-card {
+    @apply bg-white rounded-argon-lg;
+    box-shadow: var(--argon-card-shadow);
   }
 
-  .node-card-header {
-    @apply px-6 py-4 border-b border-node-border flex items-center justify-between;
+  .argon-card-header {
+    @apply px-6 py-5 border-b border-argon-lighter;
   }
 
-  .node-card-body {
+  .argon-card-body {
     @apply p-6;
   }
 
-  /* Glassmorphism variant */
-  .node-glass {
-    @apply bg-node-card/70 border border-node-border rounded-node-lg;
-    backdrop-filter: blur(20px);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  /* Argon badge variants */
+  .argon-badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase;
   }
 
-  /* Badge variants */
-  .node-badge {
-    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider;
+  .argon-badge-primary {
+    @apply bg-argon-primary/10 text-argon-primary;
   }
 
-  .node-badge-success {
-    @apply bg-argon-success/15 text-argon-success border border-argon-success/25;
+  .argon-badge-success {
+    @apply bg-argon-success/10 text-argon-success;
   }
 
-  .node-badge-danger {
-    @apply bg-argon-danger/15 text-argon-danger border border-argon-danger/25;
+  .argon-badge-danger {
+    @apply bg-argon-danger/10 text-argon-danger;
   }
 
-  .node-badge-warning {
-    @apply bg-argon-warning/15 text-argon-warning border border-argon-warning/25;
+  .argon-badge-warning {
+    @apply bg-argon-warning/10 text-argon-warning;
   }
 
-  .node-badge-info {
-    @apply bg-argon-info/15 text-argon-info border border-argon-info/25;
+  .argon-badge-info {
+    @apply bg-argon-info/10 text-argon-info;
   }
 
-  .node-badge-primary {
-    @apply bg-argon-primary/15 text-argon-primary border border-argon-primary/25;
+  /* Argon icon badge (circular gradient) */
+  .argon-icon-badge {
+    @apply w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg;
   }
 
-  /* Icon badge (circular gradient) */
-  .node-icon-badge {
-    @apply w-11 h-11 rounded-xl flex items-center justify-center text-white;
+  /* Argon button */
+  .argon-btn {
+    @apply px-4 py-2 text-sm font-semibold rounded-argon transition-all duration-150;
+  }
+
+  .argon-btn-primary {
+    @apply bg-argon-primary text-white hover:bg-argon-primary-dark shadow-argon-primary;
+  }
+
+  .argon-btn-danger {
+    @apply bg-argon-danger text-white hover:bg-argon-danger-dark shadow-argon-danger;
+  }
+
+  .argon-btn-outline {
+    @apply bg-transparent border border-argon-lighter text-argon-muted hover:bg-argon-lighter/50;
+  }
+
+  /* Argon input */
+  .argon-input {
+    @apply px-3 py-2 bg-white border border-argon-lighter rounded-argon text-sm text-argon-default placeholder:text-argon-light focus:outline-none focus:ring-2 focus:ring-argon-primary/20 focus:border-argon-primary transition-all;
   }
 }
 
 /* ──────────────────────────────────────────────
-   Terminal Styling
+   Terminal & Animation Keyframes
    ────────────────────────────────────────────── */
 
-.terminal-scroll::-webkit-scrollbar { width: 5px; }
-.terminal-scroll::-webkit-scrollbar-track { background: #0a0d15; }
-.terminal-scroll::-webkit-scrollbar-thumb { background: #1e2345; border-radius: 9999px; }
-.terminal-scroll::-webkit-scrollbar-thumb:hover { background: #2a2f55; }
-
-/* ──────────────────────────────────────────────
-   Animations
-   ────────────────────────────────────────────── */
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+.custom-terminal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-terminal-scroll::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+.custom-terminal-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+.custom-terminal-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(94, 114, 228, 0.08), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite;
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
-@keyframes gauge-fill {
-  from { stroke-dashoffset: 251.2; }
+@keyframes terminal-line {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Grid pattern background */
-.grid-pattern {
-  background-image:
-    linear-gradient(rgba(94, 114, 228, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(94, 114, 228, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+@keyframes stepper-fill {
+  0% { width: 0%; }
+  50% { width: 100%; }
+  100% { width: 0%; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 114, 228, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(94, 114, 228, 0); }
 }

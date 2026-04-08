@@ -2,27 +2,18 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        node: {
-          bg: "#0a0d1a",
-          "bg-secondary": "#0f1225",
-          card: "#141832",
-          "card-hover": "#1a1f42",
-          border: "#1e2345",
-          "border-light": "#2a2f55",
-          "text-primary": "#e2e8f0",
-          "text-secondary": "#94a3b8",
-          "text-muted": "#64748b",
-        },
+        "argon-bg": "#f8f9fe",
+        "argon-default": "#172b4d",
         argon: {
           primary: "#5e72e4",
           "primary-dark": "#4454c3",
-          "primary-light": "#7c8ef2",
           success: "#2dce89",
           "success-dark": "#24a46d",
           danger: "#f5365c",
@@ -31,46 +22,31 @@ const config: Config = {
           "warning-dark": "#da4b2a",
           info: "#11cdef",
           "info-dark": "#0da5c0",
+          default: "#172b4d",
+          secondary: "#f7fafc",
+          muted: "#8898aa",
+          light: "#adb5bd",
+          lighter: "#e9ecef",
+          bg: "#f8f9fe",
+          "card-bg": "#ffffff",
         },
       },
       boxShadow: {
-        "node-card": "0 0 30px 0 rgba(0, 0, 0, 0.3)",
-        "node-glow": "0 0 20px rgba(94, 114, 228, 0.15)",
-        "node-glow-success": "0 0 20px rgba(45, 206, 137, 0.15)",
-        "node-glow-danger": "0 0 20px rgba(245, 54, 92, 0.15)",
+        argon: "0 0 2rem 0 rgba(136, 152, 170, 0.15)",
+        "argon-lg": "0 0 3rem 0 rgba(136, 152, 170, 0.2)",
+        "argon-sm": "0 0 1rem 0 rgba(136, 152, 170, 0.1)",
+        "argon-primary": "0 4px 6px rgba(94, 114, 228, 0.4)",
+        "argon-success": "0 4px 6px rgba(45, 206, 137, 0.4)",
+        "argon-danger": "0 4px 6px rgba(245, 54, 92, 0.4)",
+        "argon-warning": "0 4px 6px rgba(251, 99, 64, 0.4)",
+        "argon-info": "0 4px 6px rgba(17, 205, 239, 0.4)",
       },
       borderRadius: {
-        node: "0.75rem",
-        "node-lg": "1rem",
+        argon: "0.375rem",
+        "argon-lg": "0.5rem",
       },
       fontFamily: {
-        sans: ['"Inter"', '"Open Sans"', "system-ui", "sans-serif"],
-        mono: ['"JetBrains Mono"', '"Fira Code"', "monospace"],
-      },
-      animation: {
-        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
-        "shield-glow": "shield-glow 3s ease-in-out infinite",
-        "fade-in": "fade-in 0.5s ease-out",
-        "slide-up": "slide-up 0.4s ease-out",
-      },
-      keyframes: {
-        "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 0 0 rgba(94, 114, 228, 0.4)" },
-          "50%": { boxShadow: "0 0 0 8px rgba(94, 114, 228, 0)" },
-        },
-        "shield-glow": {
-          "0%, 100%": { filter: "drop-shadow(0 0 6px rgba(45, 206, 137, 0.4))" },
-          "50%": { filter: "drop-shadow(0 0 16px rgba(45, 206, 137, 0.7))" },
-        },
-        "fade-in": {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        "slide-up": {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
+        sans: ['"Open Sans"', "sans-serif"],
       },
     },
   },

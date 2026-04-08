@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
+import { Open_Sans } from "next/font/google";
 import "./globals.css";
+
+const openSans = Open_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "600", "700", "800"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "FL Node Dashboard — Local Operator View",
@@ -13,9 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-node-bg grid-pattern">
-        {children}
-      </body>
+      <body className={openSans.className}>{children}</body>
     </html>
   );
 }

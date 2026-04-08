@@ -36,7 +36,7 @@ function GaugeRing({ value, label, sublabel, icon: Icon, colorClass }: {
           <circle
             cx="50" cy="50" r={radius}
             fill="none"
-            stroke="#1e2345"
+            stroke="#e9ecef"
             strokeWidth="6"
           />
           {/* Value ring */}
@@ -56,15 +56,15 @@ function GaugeRing({ value, label, sublabel, icon: Icon, colorClass }: {
         </svg>
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold text-node-text-primary">{clampedValue.toFixed(0)}%</span>
+          <span className="text-lg font-bold text-argon-default">{clampedValue.toFixed(0)}%</span>
         </div>
       </div>
       <div className="text-center">
         <div className="flex items-center justify-center gap-1.5 mb-0.5">
-          <Icon className="w-3.5 h-3.5 text-node-text-muted" />
-          <span className="text-xs font-bold text-node-text-primary">{label}</span>
+          <Icon className="w-3.5 h-3.5 text-argon-muted" />
+          <span className="text-xs font-bold text-argon-default">{label}</span>
         </div>
-        <span className="text-[0.65rem] text-node-text-muted">{sublabel}</span>
+        <span className="text-[0.65rem] text-argon-muted">{sublabel}</span>
       </div>
     </div>
   );
@@ -72,19 +72,19 @@ function GaugeRing({ value, label, sublabel, icon: Icon, colorClass }: {
 
 export default function HardwareGauges({ hardware }: { hardware: HardwareMetrics | null }) {
   return (
-    <div className="node-card animate-slide-up">
-      <div className="node-card-header">
+    <div className="argon-card">
+      <div className="argon-card-header">
         <div className="flex items-center gap-3">
-          <div className="node-icon-badge bg-gradient-to-br from-argon-info to-[#1171ef] shadow-md shadow-argon-info/20">
+          <div className="argon-icon-badge bg-gradient-to-br from-argon-info to-[#1171ef]">
             <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-node-text-primary">Hardware Resources</h3>
-            <p className="text-[0.65rem] text-node-text-muted mt-0.5">Local machine utilization</p>
+            <h3 className="text-sm font-bold text-argon-default">Hardware Resources</h3>
+            <p className="text-[0.65rem] text-argon-muted mt-0.5">Local machine utilization</p>
           </div>
         </div>
       </div>
-      <div className="node-card-body">
+      <div className="argon-card-body">
         <div className="flex items-center justify-around">
           <GaugeRing
             value={hardware?.cpuPercent ?? 0}
@@ -93,7 +93,7 @@ export default function HardwareGauges({ hardware }: { hardware: HardwareMetrics
             icon={Cpu}
             colorClass="text-argon-info"
           />
-          <div className="w-px h-20 bg-node-border" />
+          <div className="w-px h-20 bg-argon-lighter" />
           <GaugeRing
             value={hardware?.ramPercent ?? 0}
             label="RAM"
