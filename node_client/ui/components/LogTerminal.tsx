@@ -52,7 +52,8 @@ export default function LogTerminal({ logs }: { logs: LogEntry[] }) {
     <div className="argon-card flex flex-col h-full">
       {/* Header */}
       <div className="argon-card-header flex-shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-argon bg-gradient-to-br from-argon-default to-[#344767] flex items-center justify-center">
             <Terminal className="w-3.5 h-3.5 text-white" />
           </div>
@@ -85,16 +86,17 @@ export default function LogTerminal({ logs }: { logs: LogEntry[] }) {
             </button>
           )}
         </div>
+        </div>
       </div>
 
       {/* Terminal body */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto custom-terminal-scroll bg-argon-bg/30 font-mono text-xs leading-[1.9] min-h-[300px] max-h-[400px]"
+        className="flex-1 overflow-y-auto custom-terminal-scroll bg-argon-bg/30 font-mono text-xs leading-[1.9] h-[300px] min-h-[300px]"
       >
         {logs.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full">
             <div className="text-center">
               <Terminal className="w-8 h-8 text-argon-muted/30 mx-auto mb-2" />
               <p className="text-argon-muted font-sans text-[0.6875rem] font-semibold">Waiting for log output...</p>

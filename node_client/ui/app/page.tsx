@@ -7,24 +7,24 @@ import LossChart from "@/components/LossChart";
 import AccuracyChart from "@/components/AccuracyChart";
 import HardwareGauges from "@/components/HardwareGauges";
 import LogTerminal from "@/components/LogTerminal";
-import Sidebar from "@/components/Sidebar";
 import { Shield, Layers } from "lucide-react";
 
 export default function Home() {
   const { status, hardware, metrics, logs, connected, wsConnected } = useNodeData();
 
   return (
-    <div className="min-h-screen bg-argon-bg flex">
-      <Sidebar activeItem="Dashboard" />
-
-      <main className="flex-1 ml-[282px] p-8 pb-20 space-y-6">
+    <div className="min-h-screen bg-argon-bg flex justify-center">
+      <main className="w-full px-8 pb-20 space-y-6">
         {/* Top Header Row */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-argon-default mb-1">Node Dashboard</h1>
+        <div className="relative mb-10 mt-4 flex justify-center items-center">
+          <div className="absolute right-0 top-0">
+            <ConnectionIndicator connected={connected} wsConnected={wsConnected} />
+          </div>
+          <div className="text-center flex flex-col items-center">
+            <img src="/logo.png" alt="FL Platform" className="w-[120px] h-[50px] mb-4 drop-shadow-md" />
+            <h1 className="text-3xl font-bold text-argon-default mb-1">Node Dashboard</h1>
             <p className="text-sm text-argon-muted">Local Operator View</p>
           </div>
-          <ConnectionIndicator connected={connected} wsConnected={wsConnected} />
         </div>
 
         {/* Status Header — Full Width */}
