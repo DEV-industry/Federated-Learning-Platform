@@ -21,7 +21,7 @@ export default function Home() {
             <ConnectionIndicator connected={connected} wsConnected={wsConnected} />
           </div>
           <div className="text-center flex flex-col items-center">
-            <img src="/logo.png" alt="FL Platform" className="w-[120px] h-[50px] mb-4 drop-shadow-md" />
+            <img src="/logo.png" alt="FL Platform" className="w-auto h-20 object-contain mb-4 drop-shadow-md" />
             <h1 className="text-3xl font-bold text-argon-default mb-1">Node Dashboard</h1>
             <p className="text-sm text-argon-muted">Local Operator View</p>
           </div>
