@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
 import "./globals.css";
+import Sidebar from "./components/Sidebar";
 
 const openSans = Open_Sans({
   subsets: ["latin"],
@@ -20,7 +21,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={openSans.className}>{children}</body>
+      <body className={openSans.className}>
+        <div className="min-h-screen bg-argon-bg flex">
+          <Sidebar />
+          <main className="flex-1 ml-[282px] p-8 pb-20">
+            {children}
+          </main>
+        </div>
+      </body>
     </html>
   );
 }

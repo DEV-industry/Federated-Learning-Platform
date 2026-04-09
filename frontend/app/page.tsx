@@ -6,7 +6,6 @@ import SockJS from "sockjs-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:8443";
 
-import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
 import MetricCard from "./components/MetricCard";
 import NodeActivityHeatmap from "./components/NodeActivityHeatmap";
@@ -139,11 +138,8 @@ export default function Home() {
   const totalNodes = status?.totalNodes || 0;
 
   return (
-    <div className="min-h-screen bg-argon-bg flex">
-      <Sidebar activeItem="Dashboard" />
-
-      <main className="flex-1 ml-[282px] p-8 pb-20">
-        <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
+    <div className="flex flex-col">
+      <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
 
         {/* Online Status Pill */}
         <div className="flex items-center gap-6 mb-6">
@@ -235,8 +231,7 @@ export default function Home() {
             <NodeClientsTable nodeDetails={nodeDetails} nodeActivity={nodeActivity} />
           </div>
           <NodeLocationsCard nodeDetails={nodeDetails} />
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

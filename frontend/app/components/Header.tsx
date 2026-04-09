@@ -4,10 +4,13 @@ import { Search, Bell, Download, RotateCcw, User } from "lucide-react";
 export default function Header({
   onReset,
   downloadUrl,
+  title,
 }: {
   onReset: () => void;
   downloadUrl: string;
+  title?: string;
 }) {
+  const pageTitle = title || "Dashboard";
   return (
     <header className="flex items-center justify-between mb-6">
       {/* Left: Breadcrumb + Title */}
@@ -15,9 +18,9 @@ export default function Header({
         <div className="flex items-center gap-1.5 text-[0.8125rem] text-argon-muted mb-1">
           <span className="hover:text-argon-primary cursor-pointer transition-colors">Pages</span>
           <span>/</span>
-          <span className="text-argon-default font-semibold">Dashboard</span>
+          <span className="text-argon-default font-semibold">{pageTitle}</span>
         </div>
-        <h1 className="text-lg font-bold text-argon-default">Dashboard</h1>
+        <h1 className="text-lg font-bold text-argon-default">{pageTitle}</h1>
       </div>
 
       {/* Right: Search + Actions */}

@@ -1,43 +1,49 @@
 "use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   BarChart3, Server, Shield, Settings, HelpCircle,
   Download, Activity, LayoutDashboard, Cpu,
 } from "lucide-react";
 
-function NavItem({ icon: Icon, label, active }: { icon: any; label: string; active?: boolean }) {
+function NavItem({ icon: Icon, label, href }: { icon: any; label: string; href: string }) {
+  const pathname = usePathname();
+  const active = pathname === href;
+
   return (
-    <button
+    <Link
+      href={href}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-argon text-[0.8125rem] font-semibold transition-all duration-200 mb-0.5 ${active
         ? "bg-argon-primary text-white shadow-argon-primary"
         : "text-argon-muted hover:bg-argon-lighter/50"
         }`}
     >
-      <div className={`w-8 h-8 rounded-argon flex items-center justify-center ${active
+      <div className={`w-8 h-8 rounded-argon flex items-center justify-center flex-shrink-0 ${active
         ? "bg-white/20"
         : "bg-white shadow-argon-sm"
         }`}>
         <Icon className={`w-[14px] h-[14px] ${active ? "text-white" : "text-argon-primary"}`} />
       </div>
       {label}
-    </button>
+    </Link>
   );
 }
 
-export default function Sidebar({ activeItem }: { activeItem: string }) {
+export default function Sidebar() {
   const generalItems = [
-    { icon: LayoutDashboard, label: "Dashboard" },
-    { icon: BarChart3, label: "Analytics" },
-    { icon: Server, label: "Nodes" },
-    { icon: Settings, label: "Config" },
-    { icon: Shield, label: "Security" },
+    { icon: LayoutDashboard, label: "Dashboard", href: "/" },
+    { icon: BarChart3, label: "Analytics", href: "/analytics" },
+    { icon: Server, label: "Nodes", href: "/nodes" },
+    { icon: Settings, label: "Config", href: "/config" },
+    { icon: Shield, label: "Security", href: "/security" },
   ];
   const otherItems = [
-    { icon: Download, label: "Model Export" },
-    { icon: Activity, label: "Logs" },
+    { icon: Download, label: "Model Export", href: "/export" },
+    { icon: Activity, label: "Logs", href: "/logs" },
   ];
   const supportItems = [
-    { icon: Settings, label: "Settings" },
-    { icon: HelpCircle, label: "Help Center" },
+    { icon: Settings, label: "Settings", href: "/settings" },
+    { icon: HelpCircle, label: "Help Center", href: "/help" },
   ];
 
   return (
@@ -54,21 +60,21 @@ export default function Sidebar({ activeItem }: { activeItem: string }) {
       <nav className="flex-1 px-4 space-y-6">
         <div>
           {generalItems.map((item) => (
-            <NavItem key={item.label} icon={item.icon} label={item.label} active={activeItem === item.label} />
+            <NavItem key={item.label} icon={item.icon} label={item.label} href={item.href} />
           ))}
         </div>
 
         <div>
           <p className="text-[0.625rem] font-bold text-argon-muted uppercase tracking-widest px-4 mb-2">Other Tools</p>
           {otherItems.map((item) => (
-            <NavItem key={item.label} icon={item.icon} label={item.label} />
+            <NavItem key={item.label} icon={item.icon} label={item.label} href={item.href} />
           ))}
         </div>
 
         <div>
           <p className="text-[0.625rem] font-bold text-argon-muted uppercase tracking-widest px-4 mb-2">Support</p>
           {supportItems.map((item) => (
-            <NavItem key={item.label} icon={item.icon} label={item.label} />
+            <NavItem key={item.label} icon={item.icon} label={item.label} href={item.href} />
           ))}
         </div>
       </nav>
