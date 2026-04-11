@@ -66,7 +66,8 @@ public class CoordinatorViewService {
         long activeRegistered = registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("totalNodes", nodeWeights.size());
+        result.put("totalNodes", activeRegistered);
+        result.put("submittedThisRound", nodeWeights.size());
         result.put("expectedNodes", minQuorum);
         result.put("registeredNodes", activeRegistered);
         result.put("currentRound", currentRound);
