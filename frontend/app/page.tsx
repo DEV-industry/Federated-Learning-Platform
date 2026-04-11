@@ -12,7 +12,6 @@ import NodeActivityHeatmap from "./components/NodeActivityHeatmap";
 import AccuracyChart from "./components/AccuracyChart";
 import NodeClientsTable from "./components/NodeClientsTable";
 import NodeLocationsCard from "./components/NodeLocationsCard";
-import ConfigPanel from "./components/ConfigPanel";
 import RoundStepper from "./components/RoundStepper";
 import EventTerminal from "./components/EventTerminal";
 import NetworkGraph from "./components/NetworkGraph";
@@ -27,8 +26,6 @@ const normalizeHistory = (input: any): any[] => {
 export default function Home() {
   const [status, setStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [expectedNodesInput, setExpectedNodesInput] = useState<string>("");
-  const [maliciousFractionInput, setMaliciousFractionInput] = useState<string>("");
   const [eventLogs, setEventLogs] = useState<string[]>([]);
   const [nodeActivity, setNodeActivity] = useState<Record<string, { status: string; detail: string }>>({});
   const [globalStage, setGlobalStage] = useState<string>("IDLE");
@@ -39,8 +36,6 @@ export default function Home() {
         .then((res) => res.json())
         .then((data) => {
           setStatus(data);
-          if (!expectedNodesInput) setExpectedNodesInput(data.expectedNodes?.toString() || "2");
-          if (!maliciousFractionInput) setMaliciousFractionInput(data.maliciousFraction?.toString() || "0.3");
           if (data.eventLogs) setEventLogs(data.eventLogs);
           if (data.nodeActivity) setNodeActivity(data.nodeActivity);
           if (data.globalStage) setGlobalStage(data.globalStage);
@@ -85,7 +80,7 @@ export default function Home() {
     return () => {
       client.deactivate();
     };
-  }, [expectedNodesInput, maliciousFractionInput]);
+  }, []);
 
   const resetTraining = async () => {
     if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
@@ -98,22 +93,6 @@ export default function Home() {
       setGlobalStage("IDLE");
     } catch (err) {
       console.error("Failed to reset training system.", err);
-    }
-  };
-
-  const updateConfig = async () => {
-    try {
-      await fetch(`${API_URL}/api/config`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expectedNodes: parseInt(expectedNodesInput),
-          maliciousFraction: parseFloat(maliciousFractionInput),
-        }),
-      });
-      alert(`Config updated! Required Nodes: ${expectedNodesInput}, Malicious Fraction: ${maliciousFractionInput}`);
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -142,21 +121,12 @@ export default function Home() {
       <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
 
         {/* Online Status Pill */}
-        <div className="flex items-center gap-6 mb-6">
+        <div className="flex items-center gap-6 mb-6 mt-2">
           <div className="flex items-center gap-2 argon-card px-4 py-2 rounded-full">
             <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${status ? "bg-argon-success shadow-[0_0_6px_rgba(45,206,137,0.5)]" : "bg-argon-danger"}`} />
             <span className="text-sm font-semibold text-argon-muted">{status ? "System Online" : "Connecting..."}</span>
           </div>
         </div>
-
-        <ConfigPanel
-          expectedNodesInput={expectedNodesInput}
-          setExpectedNodesInput={setExpectedNodesInput}
-          maliciousFractionInput={maliciousFractionInput}
-          setMaliciousFractionInput={setMaliciousFractionInput}
-          onApply={updateConfig}
-          status={status}
-        />
 
         {/* 4-Column KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
