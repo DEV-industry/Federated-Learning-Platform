@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
     const auditMap: Record<string, { accepted: number; rejected: number }> = {};
     for (const round of history) {
       if (round.nodeStatuses) {
-        for (const [nodeId, status] of Object.entries(round.nodeStatuses)) {
+        for (const [nodeId, status] of Object.entries(round.nodeStatuses as Record<string, string>)) {
           if (!auditMap[nodeId]) auditMap[nodeId] = { accepted: 0, rejected: 0 };
           if (status === "Accepted" || status === "Accepted (HE Blind)" || status.includes("Accepted")) {
             auditMap[nodeId].accepted++;
