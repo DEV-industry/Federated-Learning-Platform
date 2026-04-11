@@ -27,6 +27,7 @@ public class CoordinatorViewService {
             boolean currentDpEnabled,
             double currentFedproxMu,
             double currentDpNoiseMultiplier,
+            boolean manualHyperparamLock,
             LiveActivityTracker liveActivityTracker
     ) {
         List<Map<String, Object>> nodeDetails = new ArrayList<>();
@@ -75,7 +76,8 @@ public class CoordinatorViewService {
         result.put("dynamicHyperparameters", Map.of(
                 "dpEnabled", currentDpEnabled,
                 "fedproxMu", currentFedproxMu,
-                "dpNoiseMultiplier", currentDpNoiseMultiplier
+                "dpNoiseMultiplier", currentDpNoiseMultiplier,
+                "manualHyperparamLock", manualHyperparamLock
         ));
         result.put("nodeDetails", nodeDetails);
         result.put("globalStage", liveActivityTracker.getGlobalStage());

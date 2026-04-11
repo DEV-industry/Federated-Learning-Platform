@@ -34,6 +34,7 @@ public class RoundAggregationService {
             boolean currentDpEnabled,
             double currentFedproxMu,
             double currentDpNoiseMultiplier,
+            boolean manualHyperparamLock,
             Double previousRoundLoss,
             Double previousRoundAccuracy,
             double fedproxMuMin,
@@ -183,22 +184,28 @@ public class RoundAggregationService {
             }
         }
 
-        TunedState tunedState = tuneRoundHyperparameters(
-                dynamicHyperparameterController,
-                currentDpEnabled,
-                currentFedproxMu,
-                currentDpNoiseMultiplier,
-                previousRoundLoss,
-                previousRoundAccuracy,
-                avgLoss,
-                accuracy,
-                fedproxMuMin,
-                fedproxMuMax,
-                fedproxMuStep,
-                dpNoiseMin,
-                dpNoiseMax,
-                dpNoiseStep
-        );
+        TunedState tunedState;
+        if (manualHyperparamLock) {
+            System.out.println("Manual hyperparameter lock is ACTIVE. Skipping auto-tuning.");
+            tunedState = new TunedState(currentFedproxMu, currentDpNoiseMultiplier, avgLoss, accuracy);
+        } else {
+            tunedState = tuneRoundHyperparameters(
+                    dynamicHyperparameterController,
+                    currentDpEnabled,
+                    currentFedproxMu,
+                    currentDpNoiseMultiplier,
+                    previousRoundLoss,
+                    previousRoundAccuracy,
+                    avgLoss,
+                    accuracy,
+                    fedproxMuMin,
+                    fedproxMuMax,
+                    fedproxMuStep,
+                    dpNoiseMin,
+                    dpNoiseMax,
+                    dpNoiseStep
+            );
+        }
 
         int updatedRound = currentRound + 1;
 

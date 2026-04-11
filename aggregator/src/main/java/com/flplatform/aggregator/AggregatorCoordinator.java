@@ -155,6 +155,7 @@ public class AggregatorCoordinator {
     private volatile double currentDpNoiseMultiplier;
     private volatile Double previousRoundLoss;
     private volatile Double previousRoundAccuracy;
+    private volatile boolean manualHyperparamLock = false;
 
     // === LIVE ACTIVITY TRACKING ===
     private final LiveActivityTracker liveActivityTracker = new LiveActivityTracker();
@@ -622,6 +623,12 @@ public class AggregatorCoordinator {
             updated = true;
         }
 
+        if (config.containsKey("manualHyperparamLock")) {
+            this.manualHyperparamLock = (Boolean) config.get("manualHyperparamLock");
+            message.append("manualHyperparamLock=").append(this.manualHyperparamLock).append(" ");
+            updated = true;
+        }
+
         if (updated) {
             int effectiveQuorum = Math.max(this.minQuorum,
                     (int) registeredNodeRepository.countByStatus(RegisteredNodeEntity.NodeStatus.ACTIVE));
@@ -670,6 +677,7 @@ public class AggregatorCoordinator {
                 currentDpEnabled,
                 currentFedproxMu,
                 currentDpNoiseMultiplier,
+                manualHyperparamLock,
                 previousRoundLoss,
                 previousRoundAccuracy,
                 fedproxMuMin,
@@ -762,6 +770,7 @@ public class AggregatorCoordinator {
                 currentDpEnabled,
                 currentFedproxMu,
                 currentDpNoiseMultiplier,
+                manualHyperparamLock,
                 liveActivityTracker
         );
     }

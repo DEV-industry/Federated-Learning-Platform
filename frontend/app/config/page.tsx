@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Header from "@/app/components/Header";
-import { Settings, Shield, Sliders, Save, CheckCircle2, Server, Key, Brain } from "lucide-react";
+import { Settings, Shield, Sliders, Save, CheckCircle2, Server, Key, Brain, Lock, Unlock } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:8443";
 
@@ -12,6 +12,7 @@ export default function ConfigPage() {
   const [dpEnabled, setDpEnabled] = useState<boolean>(true);
   const [fedproxMu, setFedproxMu] = useState<number>(0.01);
   const [dpNoiseMultiplier, setDpNoiseMultiplier] = useState<number>(0.01);
+  const [manualHyperparamLock, setManualHyperparamLock] = useState<boolean>(false);
 
   // UI state
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -30,6 +31,7 @@ export default function ConfigPage() {
           if (data.dynamicHyperparameters.dpEnabled !== undefined) setDpEnabled(data.dynamicHyperparameters.dpEnabled);
           if (data.dynamicHyperparameters.fedproxMu !== undefined) setFedproxMu(data.dynamicHyperparameters.fedproxMu);
           if (data.dynamicHyperparameters.dpNoiseMultiplier !== undefined) setDpNoiseMultiplier(data.dynamicHyperparameters.dpNoiseMultiplier);
+          if (data.dynamicHyperparameters.manualHyperparamLock !== undefined) setManualHyperparamLock(data.dynamicHyperparameters.manualHyperparamLock);
         }
         setIsLoading(false);
       })
@@ -53,6 +55,7 @@ export default function ConfigPage() {
           dpEnabled,
           fedproxMu,
           dpNoiseMultiplier,
+          manualHyperparamLock,
         }),
       });
 
@@ -175,6 +178,26 @@ export default function ConfigPage() {
                     <span>0.001</span>
                     <span>0.500</span>
                   </div>
+                </div>
+
+                <div className="border-t border-argon-lighter pt-5 mt-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-[0.8125rem] font-bold text-argon-default">Lock Manual Overrides</label>
+                      <p className="text-xs text-argon-muted mt-1">When active, the auto-tuner will NOT override your manual μ and DP noise values between rounds.</p>
+                    </div>
+                    <label className="flex items-center cursor-pointer relative flex-shrink-0 ml-4">
+                      <input type="checkbox" className="sr-only" checked={manualHyperparamLock} onChange={(e) => setManualHyperparamLock(e.target.checked)} />
+                      <div className={`w-11 h-6 rounded-full transition-colors duration-300 ${manualHyperparamLock ? 'bg-orange-500' : 'bg-argon-lighter'}`}></div>
+                      <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 shadow-sm ${manualHyperparamLock ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                    </label>
+                  </div>
+                  {manualHyperparamLock && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-orange-600 bg-orange-50 px-3 py-2 rounded-lg font-semibold">
+                      <Lock className="w-3.5 h-3.5" />
+                      Auto-tuning paused — your manual values will persist across all future rounds.
+                    </div>
+                  )}
                 </div>
 
               </div>
