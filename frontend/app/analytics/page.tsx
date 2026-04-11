@@ -63,8 +63,11 @@ export default function AnalyticsPage() {
       if (round.nodeStatuses) {
         for (const [nodeId, status] of Object.entries(round.nodeStatuses)) {
           if (!auditMap[nodeId]) auditMap[nodeId] = { accepted: 0, rejected: 0 };
-          if (status === "Accepted") auditMap[nodeId].accepted++;
-          else auditMap[nodeId].rejected++;
+          if (status === "Accepted" || status === "Accepted (HE Blind)" || status.includes("Accepted")) {
+            auditMap[nodeId].accepted++;
+          } else {
+            auditMap[nodeId].rejected++;
+          }
         }
       }
     }
