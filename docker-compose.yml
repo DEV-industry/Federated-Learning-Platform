@@ -81,12 +81,13 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 1536M
+          memory: 3072M
     ports:
       - "8443:8443"
       - "9443:9443"
     restart: on-failure
     environment:
+      - JAVA_OPTS=-Xms512m -Xmx2560m
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
