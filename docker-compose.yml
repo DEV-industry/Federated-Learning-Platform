@@ -73,7 +73,15 @@ services:
       - fl-network
 
   aggregator:
-    build: ./aggregator
+    build:
+      context: ./aggregator
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1536M
     ports:
       - "8443:8443"
       - "9443:9443"
@@ -125,7 +133,15 @@ services:
       - fl-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
     ports:
       - "3000:3000"
     depends_on:
@@ -135,7 +151,15 @@ services:
       - fl-network
 
   node_client_1:
-    build: ./node_client
+    build:
+      context: ./node_client
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     environment:
       - AGGREGATOR_BASE_URL=https://aggregator:8443
       - AGGREGATOR_GRPC_URL=aggregator:9443
@@ -161,7 +185,15 @@ services:
       - fl-network
 
   node_client_2:
-    build: ./node_client
+    build:
+      context: ./node_client
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     environment:
       - AGGREGATOR_BASE_URL=https://aggregator:8443
       - AGGREGATOR_GRPC_URL=aggregator:9443
@@ -187,7 +219,15 @@ services:
       - fl-network
 
   node_client_3:
-    build: ./node_client
+    build:
+      context: ./node_client
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     environment:
       - AGGREGATOR_BASE_URL=https://aggregator:8443
       - AGGREGATOR_GRPC_URL=aggregator:9443

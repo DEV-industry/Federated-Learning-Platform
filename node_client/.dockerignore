@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.git
+*.log
+ui/node_modules
+ui/.next
+.pytest_cache
+.venv
