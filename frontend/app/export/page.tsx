@@ -1,21 +1,111 @@
 "use client";
+import { useEffect, useState, useMemo } from "react";
 import Header from "@/app/components/Header";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
-export default function exportPage() {
+import ExportKPICards from "./ExportKPICards";
+import ModelVersionTable from "./ModelVersionTable";
+import ModelInfoCards from "./ModelInfoCards";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:8443";
+
+const normalizeHistory = (input: any): any[] => {
+  if (!Array.isArray(input)) return [];
+  return [...input]
+    .filter((item: any) => typeof item?.round === "number")
+    .sort((a: any, b: any) => a.round - b.round);
+};
+
+export default function ExportPage() {
+  const [history, setHistory] = useState<any[]>([]);
+  const [status, setStatus] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // ── Data fetching + WebSocket ──────────────────────────────────
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_URL}/api/status`).then((r) => r.json()),
+      fetch(`${API_URL}/api/history`).then((r) => r.json()),
+    ])
+      .then(([statusData, historyData]) => {
+        setStatus(statusData);
+        setHistory(normalizeHistory(historyData));
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setIsLoading(false);
+      });
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${API_URL}/ws-sockjs`),
+      onConnect: () => {
+        client.subscribe("/topic/updates", (message) => {
+          if (message.body) {
+            const data = JSON.parse(message.body);
+            if (data.status) setStatus(data.status);
+            if (Array.isArray(data.history)) setHistory(normalizeHistory(data.history));
+          }
+        });
+      },
+    });
+
+    client.activate();
+    return () => { client.deactivate(); };
+  }, []);
+
+  // ── Computed data ──────────────────────────────────────────────
+  const currentRound = status?.currentRound || 0;
+
+  const modelVersions = useMemo(() => {
+    return [...history].reverse().map((round) => ({
+      round: round.round,
+      loss: round.loss || 0,
+      accuracy: round.accuracy || 0,
+      timestamp: round.timestamp || null,
+      nodesParticipated: round.nodeStatuses ? Object.keys(round.nodeStatuses).length : 0,
+    }));
+  }, [history]);
+
+  const latestModel = modelVersions.length > 0 ? modelVersions[0] : null;
+
+  const heEnabled = status?.dynamicHyperparameters?.dpEnabled !== undefined; // HE is always on if we're in this setup
+  const dpEnabled = status?.dynamicHyperparameters?.dpEnabled || false;
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="flex flex-col">
-      <Header onReset={() => {}} downloadUrl="#" title="Model Export" />
-      
-      <div className="argon-card p-10 flex flex-col items-center justify-center text-center mt-6 min-h-[50vh]">
-        <div className="w-16 h-16 bg-argon-lighter rounded-full flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-argon-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+      <Header onReset={() => {}} downloadUrl={`${API_URL}/api/model/download`} title="Model Export" />
+
+      {isLoading ? (
+        <div className="flex items-center justify-center p-20">
+          <div className="animate-spin w-8 h-8 rounded-full border-t-2 border-l-2 border-argon-primary"></div>
         </div>
-        <h2 className="text-2xl font-bold text-argon-default mb-2">Under Construction</h2>
-        <p className="text-argon-muted max-w-md">The Model Export module is actively being developed. New capabilities will be available here soon.</p>
-        <button className="mt-8 argon-btn argon-btn-primary" onClick={() => window.history.back()}>
-          Go Back
-        </button>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-6 mt-2">
+          <ExportKPICards
+            currentRound={currentRound}
+            latestAccuracy={latestModel?.accuracy || 0}
+            latestLoss={latestModel?.loss || 0}
+            totalParams={null}
+            apiUrl={API_URL}
+          />
+
+          <ModelVersionTable
+            models={modelVersions}
+            currentRound={currentRound}
+            apiUrl={API_URL}
+          />
+
+          <ModelInfoCards
+            currentRound={currentRound}
+            totalRounds={modelVersions.length}
+            heEnabled={heEnabled}
+            dpEnabled={dpEnabled}
+          />
+        </div>
+      )}
     </div>
   );
 }

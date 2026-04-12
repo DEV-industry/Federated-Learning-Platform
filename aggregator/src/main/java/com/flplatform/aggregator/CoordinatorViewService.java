@@ -125,6 +125,7 @@ public class CoordinatorViewService {
             roundMap.put("loss", r.getAvgLoss());
             roundMap.put("accuracy", r.getAccuracy());
             roundMap.put("nodeStatuses", r.getNodeStatuses() != null ? r.getNodeStatuses() : new HashMap<>());
+            roundMap.put("timestamp", r.getTimestamp() != null ? r.getTimestamp().toString() : null);
             history.add(roundMap);
         }
         return history;
