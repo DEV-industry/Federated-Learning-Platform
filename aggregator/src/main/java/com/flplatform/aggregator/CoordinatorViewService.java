@@ -61,6 +61,20 @@ public class CoordinatorViewService {
             if (liveActivityTracker.hasNodeActivity(nodeId)) {
                 detail.put("activity", liveActivityTracker.getNodeActivity(nodeId));
             }
+
+            // Enrich with DB metadata for Security dashboard
+            Optional<RegisteredNodeEntity> regNodeOpt = registeredNodeRepository.findByNodeId(nodeId);
+            if (regNodeOpt.isPresent()) {
+                RegisteredNodeEntity rn = regNodeOpt.get();
+                detail.put("hostname", rn.getHostname());
+                detail.put("authVersion", rn.getAuthVersion());
+                detail.put("clientVersion", rn.getClientVersion());
+                detail.put("deviceOs", rn.getDeviceOs());
+                detail.put("registeredAt", rn.getRegisteredAt() != null ? rn.getRegisteredAt().toString() : null);
+                detail.put("lastHeartbeat", rn.getLastHeartbeat() != null ? rn.getLastHeartbeat().toString() : null);
+                detail.put("enrolledAt", rn.getEnrolledAt() != null ? rn.getEnrolledAt().toString() : null);
+                detail.put("hasPublicKey", rn.getPublicKey() != null && !rn.getPublicKey().isBlank());
+            }
             nodeDetails.add(detail);
         }
 
