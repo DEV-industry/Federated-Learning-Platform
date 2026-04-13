@@ -72,6 +72,8 @@ export default function NodesPage() {
     switch (status) {
       case "ACTIVE":
       case "Accepted": return <span className="argon-badge argon-badge-success">Active</span>;
+      case "Accepted (HE Blind)": return <span className="argon-badge argon-badge-success">Active (HE Blind)</span>;
+      case "Accepted (Fallback)": return <span className="argon-badge argon-badge-success">Active (Fallback)</span>;
       case "DISCONNECTED": return <span className="argon-badge argon-badge-danger">Disconnected</span>;
       case "STALE": return <span className="argon-badge argon-badge-warning">Stale</span>;
       case "LOCKED":

@@ -42,13 +42,16 @@ public class CoordinatorViewService {
 
         for (String nodeId : allActiveNodes) {
             String status = "Pending";
-            if (nodeSecurityStatus.containsKey(nodeId)) {
+            Optional<RegisteredNodeEntity> regNode = registeredNodeRepository.findByNodeId(nodeId);
+            
+            if (regNode.isPresent() && (regNode.get().getStatus() == RegisteredNodeEntity.NodeStatus.BANNED 
+                    || regNode.get().getStatus() == RegisteredNodeEntity.NodeStatus.LOCKED
+                    || regNode.get().getStatus() == RegisteredNodeEntity.NodeStatus.DISCONNECTED)) {
+                status = regNode.get().getStatus().name();
+            } else if (nodeSecurityStatus.containsKey(nodeId)) {
                 status = nodeSecurityStatus.get(nodeId);
-            } else {
-                Optional<RegisteredNodeEntity> regNode = registeredNodeRepository.findByNodeId(nodeId);
-                if (regNode.isPresent()) {
-                    status = "Registered (" + regNode.get().getStatus().name() + ")";
-                }
+            } else if (regNode.isPresent()) {
+                status = regNode.get().getStatus().name();
             }
             int rejections = nodeRejectionCount.getOrDefault(nodeId, 0);
             boolean dpEnabled = nodeDpStatus.getOrDefault(nodeId, false);
