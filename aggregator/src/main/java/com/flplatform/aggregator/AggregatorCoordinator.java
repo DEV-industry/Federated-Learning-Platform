@@ -136,6 +136,9 @@ public class AggregatorCoordinator {
     @Value("${fl.dynamic-hparams.dp-noise.step:0.002}")
     private double dpNoiseStep;
 
+    @Value("${fl.monitoring.max-event-logs:200}")
+    private int maxEventLogs;
+
     private final Map<String, List<Double>> nodeWeights = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeLosses = new ConcurrentHashMap<>();
     private final Map<String, Double> nodeAccuracies = new ConcurrentHashMap<>();
@@ -168,6 +171,7 @@ public class AggregatorCoordinator {
 
     @jakarta.annotation.PostConstruct
     public void init() {
+        this.liveActivityTracker.setMaxEventLogs(maxEventLogs);
         int maxRetries = 15;
         int delayMs = 3000;
 

@@ -11,8 +11,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class LiveActivityTracker {
 
-    private static final int MAX_EVENT_LOGS = 50;
+    private int maxEventLogs = 200;
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    public void setMaxEventLogs(int maxEventLogs) {
+        this.maxEventLogs = maxEventLogs;
+    }
 
     private final Map<String, Map<String, String>> nodeActivity = new ConcurrentHashMap<>();
     private final LinkedList<String> eventLogs = new LinkedList<>();
@@ -56,7 +60,7 @@ public class LiveActivityTracker {
         String entry = "[" + timestamp + "] " + message;
         synchronized (eventLogs) {
             eventLogs.addLast(entry);
-            while (eventLogs.size() > MAX_EVENT_LOGS) {
+            while (eventLogs.size() > maxEventLogs) {
                 eventLogs.removeFirst();
             }
         }
