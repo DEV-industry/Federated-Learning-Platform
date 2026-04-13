@@ -4,6 +4,7 @@ interface Endpoint {
   method: "GET" | "POST" | "DELETE" | "PUT";
   path: string;
   description: string;
+  auth?: string;
   body?: string;
   response?: string;
 }
