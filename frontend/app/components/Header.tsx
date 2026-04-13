@@ -199,14 +199,29 @@ export default function Header({
         </div>
 
         {/* Action buttons */}
-        <a
-          href={downloadUrl}
-          target="_blank"
-          download
+        <button
+          onClick={async () => {
+            if (!downloadUrl || downloadUrl === "#") return;
+            try {
+              const res = await fetch(downloadUrl);
+              if (!res.ok) throw new Error("Export failed");
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "global_model.bin";
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+            } catch (err) {
+              console.error("Export failed:", err);
+            }
+          }}
           className="hidden sm:flex items-center gap-2 argon-btn argon-btn-outline text-[0.8125rem]"
         >
           <Download className="w-3.5 h-3.5" /> Export
-        </a>
+        </button>
 
         <button
           onClick={onReset}

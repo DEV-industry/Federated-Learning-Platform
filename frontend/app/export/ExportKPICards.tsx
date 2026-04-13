@@ -9,8 +9,22 @@ interface Props {
 }
 
 export default function ExportKPICards({ currentRound, latestAccuracy, latestLoss, totalParams, apiUrl }: Props) {
-  const handleDownload = () => {
-    window.open(`${apiUrl}/api/model/download`, "_blank");
+  const handleDownload = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/api/model/download`);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `global_model_r${currentRound}.bin`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error("Model download failed:", err);
+    }
   };
 
   return (

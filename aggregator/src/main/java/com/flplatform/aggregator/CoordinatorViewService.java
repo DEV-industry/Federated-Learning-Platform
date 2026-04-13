@@ -103,20 +103,46 @@ public class CoordinatorViewService {
         return result;
     }
 
-    public ResponseEntity<byte[]> downloadModel(List<Double> globalWeights, int currentRound) {
-        if (globalWeights == null || globalWeights.isEmpty()) {
-            return ResponseEntity.badRequest().body(new byte[0]);
+    public ResponseEntity<byte[]> downloadModel(List<Double> globalWeights, int currentRound,
+                                                     GlobalModelStateRepository globalModelStateRepository,
+                                                     MinioService minioService,
+                                                     boolean heEnabledConfig,
+                                                     byte[] heGlobalWeights) {
+        // Strategy 1: Try to load from MinIO via persisted path (works for both HE and plaintext)
+        Optional<GlobalModelStateEntity> latestState = globalModelStateRepository.findTopByOrderByCurrentRoundDesc();
+        if (latestState.isPresent() && latestState.get().getModelPath() != null) {
+            try {
+                byte[] modelBytes = minioService.downloadWeights(latestState.get().getModelPath());
+                if (modelBytes != null && modelBytes.length > 0) {
+                    int round = latestState.get().getCurrentRound();
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                    headers.setContentDispositionFormData("attachment", "global_model_r" + round + ".bin");
+                    return ResponseEntity.ok().headers(headers).body(modelBytes);
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to download model from MinIO: " + e.getMessage());
+            }
         }
 
-        byte[] modelBytes = serializeWeights(globalWeights);
+        // Strategy 2: Fallback to HE ciphertext in memory
+        if (heEnabledConfig && heGlobalWeights != null && heGlobalWeights.length > 0) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", "global_model_r" + currentRound + "_he.bin");
+            return ResponseEntity.ok().headers(headers).body(heGlobalWeights);
+        }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        headers.setContentDispositionFormData("attachment", "global_model_r" + currentRound + ".bin");
+        // Strategy 3: Fallback to in-memory plaintext weights
+        if (globalWeights != null && !globalWeights.isEmpty()) {
+            byte[] modelBytes = serializeWeights(globalWeights);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", "global_model_r" + currentRound + ".bin");
+            return ResponseEntity.ok().headers(headers).body(modelBytes);
+        }
 
-        return ResponseEntity.ok()
-                .headers(headers)
-                .body(modelBytes);
+        return ResponseEntity.noContent().build();
     }
 
     public List<Map<String, Object>> getHistory(RoundRepository roundRepository) {

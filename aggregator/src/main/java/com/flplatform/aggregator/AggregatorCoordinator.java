@@ -778,7 +778,11 @@ public class AggregatorCoordinator {
 
 
     public ResponseEntity<byte[]> downloadModel() {
-        return coordinatorViewService.downloadModel(globalWeights, currentRound);
+        return coordinatorViewService.downloadModel(
+                globalWeights, currentRound,
+                globalModelStateRepository, minioService,
+                heEnabledConfig, heGlobalWeights
+        );
     }
 
     public List<Map<String, Object>> getHistory() {
