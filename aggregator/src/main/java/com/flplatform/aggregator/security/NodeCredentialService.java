@@ -146,6 +146,7 @@ public class NodeCredentialService {
         for (RegisteredNodeEntity node : registeredNodeRepository.findAll()) {
             node.setStatus(RegisteredNodeEntity.NodeStatus.DISCONNECTED);
             node.setAuthVersion(node.getAuthVersion() + 1);
+            node.setPublicKey(null);
             registeredNodeRepository.save(node);
             revokedCount++;
         }
