@@ -88,11 +88,26 @@ export default function FLPipelineInfographic() {
                     {s.detail}
                   </span>
                 </div>
-                {/* Arrow connector (only between items) */}
-                {idx < steps.length - 1 && idx % 3 !== 2 && (
-                  <div className="hidden xl:flex absolute -right-2 top-1/2 -translate-y-1/2 z-10">
-                    <ArrowRight className="w-4 h-4 text-argon-lighter" />
-                  </div>
+                {/* Arrow connector */}
+                {idx < steps.length - 1 && (
+                  <>
+                    {/* Show on XL screens (3 columns) */}
+                    {idx % 3 !== 2 && (
+                      <div className="hidden xl:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-white border border-argon-lighter flex items-center justify-center shadow-sm">
+                          <ArrowRight className="w-4 h-4 text-argon-primary" />
+                        </div>
+                      </div>
+                    )}
+                    {/* Show on MD screens (2 columns) */}
+                    {idx % 2 === 0 && (
+                      <div className="hidden md:flex xl:hidden absolute -right-4 top-1/2 -translate-y-1/2 z-10 items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-white border border-argon-lighter flex items-center justify-center shadow-sm">
+                          <ArrowRight className="w-4 h-4 text-argon-primary" />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
