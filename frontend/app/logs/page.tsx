@@ -1,21 +1,86 @@
 "use client";
+import { useEffect, useState, useMemo } from "react";
 import Header from "@/app/components/Header";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
-export default function logsPage() {
+import LogKPICards from "./LogKPICards";
+import LiveLogTerminal from "./LiveLogTerminal";
+import NodeActivityCards from "./NodeActivityCards";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://localhost:8443";
+
+export default function LogsPage() {
+  const [eventLogs, setEventLogs] = useState<string[]>([]);
+  const [nodeActivity, setNodeActivity] = useState<Record<string, { status: string; detail: string }>>({});
+  const [globalStage, setGlobalStage] = useState<string>("IDLE");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // ── Data fetching + WebSocket ──────────────────────────────────
+  useEffect(() => {
+    fetch(`${API_URL}/api/status`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.eventLogs) setEventLogs(data.eventLogs);
+        if (data.nodeActivity) setNodeActivity(data.nodeActivity);
+        if (data.globalStage) setGlobalStage(data.globalStage);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setIsLoading(false);
+      });
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${API_URL}/ws-sockjs`),
+      onConnect: () => {
+        client.subscribe("/topic/updates", (message) => {
+          if (message.body) {
+            const data = JSON.parse(message.body);
+            if (data.eventLogs) setEventLogs(data.eventLogs);
+            if (data.nodeActivity) setNodeActivity(data.nodeActivity);
+            if (data.globalStage) setGlobalStage(data.globalStage);
+          }
+        });
+      },
+    });
+
+    client.activate();
+    return () => {
+      client.deactivate();
+    };
+  }, []);
+
+  // ── Computed stats ─────────────────────────────────────────────
+  const totalEvents = eventLogs.length;
+  const activeNodes = Object.keys(nodeActivity).length;
+  const trainingEvents = useMemo(() => {
+    return eventLogs.filter((log) => /train/i.test(log)).length;
+  }, [eventLogs]);
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="flex flex-col">
-      <Header onReset={() => {}} downloadUrl="#" title="Logs" />
-      
-      <div className="argon-card p-10 flex flex-col items-center justify-center text-center mt-6 min-h-[50vh]">
-        <div className="w-16 h-16 bg-argon-lighter rounded-full flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-argon-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+      <Header onReset={() => {}} downloadUrl="#" title="System Logs" />
+
+      {isLoading ? (
+        <div className="flex items-center justify-center p-20">
+          <div className="animate-spin w-8 h-8 rounded-full border-t-2 border-l-2 border-argon-primary"></div>
         </div>
-        <h2 className="text-2xl font-bold text-argon-default mb-2">Under Construction</h2>
-        <p className="text-argon-muted max-w-md">The Logs module is actively being developed. New capabilities will be available here soon.</p>
-        <button className="mt-8 argon-btn argon-btn-primary" onClick={() => window.history.back()}>
-          Go Back
-        </button>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-6 mt-2">
+          <LogKPICards
+            totalEvents={totalEvents}
+            globalStage={globalStage}
+            activeNodes={activeNodes}
+            trainingEvents={trainingEvents}
+          />
+
+          <LiveLogTerminal eventLogs={eventLogs} />
+
+          <NodeActivityCards nodeActivity={nodeActivity} />
+        </div>
+      )}
     </div>
   );
 }
