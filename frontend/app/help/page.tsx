@@ -10,7 +10,7 @@ import CommandReference from "./CommandReference";
 export default function HelpPage() {
   return (
     <div className="flex flex-col">
-      <Header onReset={() => {}} downloadUrl="#" title="Help Center" />
+      <Header onReset={() => { }} downloadUrl="#" title="Help Center" />
 
       <div className="flex flex-col gap-6 mt-2">
         {/* Hero banner */}
@@ -29,10 +29,10 @@ export default function HelpPage() {
             </div>
           </div>
           <div className="hidden lg:block flex-shrink-0">
-            <img 
-              src="/help-badge.png" 
-              alt="Platform Logo badge" 
-              className="w-32 h-32 object-contain opacity-90 drop-shadow-2xl brightness-110 rounded-2xl" 
+            <img
+              src="/help-badge.png"
+              alt="Platform Logo badge"
+              className="w-32 h-32 object-contain opacity-90 drop-shadow-2xl brightness-110 rounded-lg"
             />
           </div>
         </div>
