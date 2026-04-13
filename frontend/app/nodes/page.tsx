@@ -140,9 +140,9 @@ export default function NodesPage() {
                     <td className="py-5 px-6 text-right">
                       <button 
                         onClick={() => handleDisconnect(node.nodeId)}
-                        disabled={node.status === 'DISCONNECTED'}
-                        className={`inline-flex items-center justify-center p-2 rounded-argon transition-all shadow-argon-sm ${node.status === 'DISCONNECTED' ? "bg-argon-bg text-argon-light cursor-not-allowed" : "text-argon-danger hover:bg-argon-danger hover:text-white bg-argon-danger/10 cursor-pointer"}`}
-                        title={node.status === 'DISCONNECTED' ? 'Already disconnected' : 'Disconnect Node'}
+                        disabled={node.status === 'DISCONNECTED' || node.status === 'BANNED'}
+                        className={`inline-flex items-center justify-center p-2 rounded-argon transition-all shadow-argon-sm ${node.status === 'DISCONNECTED' || node.status === 'BANNED' ? "bg-argon-bg text-argon-light cursor-not-allowed" : "text-argon-danger hover:bg-argon-danger hover:text-white bg-argon-danger/10 cursor-pointer"}`}
+                        title={node.status === 'DISCONNECTED' || node.status === 'BANNED' ? 'Node is offline' : 'Disconnect Node'}
                       >
                         <ZapOff className="w-4 h-4" />
                       </button>

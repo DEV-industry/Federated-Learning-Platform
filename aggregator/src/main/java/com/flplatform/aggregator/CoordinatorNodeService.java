@@ -81,6 +81,13 @@ public class CoordinatorNodeService {
         }
 
         RegisteredNodeEntity node = nodeOpt.get();
+        if (node.getStatus() == RegisteredNodeEntity.NodeStatus.BANNED) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "status", "error",
+                    "message", "Node is banned from the platform."
+            ));
+        }
+        
         node.setLastHeartbeat(LocalDateTime.now());
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
         registeredNodeRepository.save(node);
@@ -107,7 +114,8 @@ public class CoordinatorNodeService {
         Optional<RegisteredNodeEntity> nodeOpt = registeredNodeRepository.findByNodeId(nodeId);
         if (nodeOpt.isPresent()) {
             RegisteredNodeEntity node = nodeOpt.get();
-            node.setStatus(RegisteredNodeEntity.NodeStatus.DISCONNECTED);
+            node.setStatus(RegisteredNodeEntity.NodeStatus.BANNED);
+            node.setAuthVersion(node.getAuthVersion() + 1);
             registeredNodeRepository.save(node);
             nodeWeights.remove(nodeId);
             nodeLosses.remove(nodeId);

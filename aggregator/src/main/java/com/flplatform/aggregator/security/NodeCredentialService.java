@@ -75,6 +75,10 @@ public class NodeCredentialService {
             throw new SecurityException("publicKey does not match the registered node key");
         }
 
+        if (node.getStatus() == RegisteredNodeEntity.NodeStatus.BANNED) {
+            throw new SecurityException("Node is permanently banned.");
+        }
+
         node.setHostname(normalizedHostname);
         node.setPublicKey(normalizedPublicKey);
         node.setStatus(RegisteredNodeEntity.NodeStatus.ACTIVE);
