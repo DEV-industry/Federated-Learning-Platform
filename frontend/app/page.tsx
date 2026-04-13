@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Target, TrendingUp, TrendingDown, Users } from "lucide-react";
+import ConfirmModal from "./components/ConfirmModal";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
@@ -29,6 +30,7 @@ export default function Home() {
   const [eventLogs, setEventLogs] = useState<string[]>([]);
   const [nodeActivity, setNodeActivity] = useState<Record<string, { status: string; detail: string }>>({});
   const [globalStage, setGlobalStage] = useState<string>("IDLE");
+  const [showResetModal, setShowResetModal] = useState(false);
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -83,7 +85,6 @@ export default function Home() {
   }, []);
 
   const resetTraining = async () => {
-    if (!confirm("Are you sure you want to reset all federated training rounds? This permanently deletes the Postgres database records.")) return;
     try {
       await fetch(`${API_URL}/api/training/reset`, { method: "DELETE" });
       setStatus(null);
@@ -93,6 +94,8 @@ export default function Home() {
       setGlobalStage("IDLE");
     } catch (err) {
       console.error("Failed to reset training system.", err);
+    } finally {
+      setShowResetModal(false);
     }
   };
 
@@ -118,7 +121,24 @@ export default function Home() {
 
   return (
     <div className="flex flex-col">
-      <Header onReset={resetTraining} downloadUrl={`${API_URL}/api/model/download`} />
+      <Header onReset={() => setShowResetModal(true)} downloadUrl={`${API_URL}/api/model/download`} />
+
+      <ConfirmModal
+        isOpen={showResetModal}
+        title="Reset Training Data"
+        description="Are you sure you want to reset all federated training rounds? This is a destructive operation."
+        bullets={[
+          "All training round history",
+          "Node weight submissions & verdicts",
+          "Event logs and activity records",
+          "Global model state",
+        ]}
+        confirmLabel="Reset Training"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={resetTraining}
+        onCancel={() => setShowResetModal(false)}
+      />
 
         {/* Online Status Pill */}
         <div className="flex items-center gap-6 mb-6 mt-2">
