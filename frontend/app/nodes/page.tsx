@@ -52,13 +52,16 @@ export default function NodesPage() {
   const handleDisconnect = async (nodeId: string) => {
     if (!confirm(`Are you sure you want to forcibly disconnect node ${nodeId}?`)) return;
     try {
-      await fetch(`${API_URL}/api/nodes/unregister`, {
+      const res = await fetch(`${API_URL}/api/nodes/unregister`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ nodeId }),
       });
+      if (!res.ok) {
+         throw new Error(`Server returned ${res.status}`);
+      }
       // Refresh local state purely for immediate UX before WS catches up
-      setNodeDetails(prev => prev.map(n => n.nodeId === nodeId ? { ...n, status: "DISCONNECTED" } : n));
+      setNodeDetails(prev => prev.map(n => n.nodeId === nodeId ? { ...n, status: "BANNED" } : n));
     } catch (err) {
       console.error(err);
       alert("Failed to disconnect node.");
