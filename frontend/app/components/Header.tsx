@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Bell, Download, RotateCcw, User,
   LayoutDashboard, BarChart3, Server, Settings, Shield,
-  Activity, HelpCircle, ArrowRight,
+  Activity, HelpCircle, ArrowRight, BookOpen,
 } from "lucide-react";
 
 // All searchable pages — same structure as sidebar routes
@@ -18,6 +18,7 @@ const searchablePages = [
   { label: "Logs",          href: "/logs",       icon: Activity,        section: "Tools",    keywords: ["events", "terminal", "stream", "training", "activity", "log"] },
   { label: "Settings",      href: "/settings",   icon: Settings,        section: "Support",  keywords: ["platform", "connection", "infrastructure", "danger", "reset", "docker"] },
   { label: "Help Center",   href: "/help",       icon: HelpCircle,      section: "Support",  keywords: ["help", "documentation", "support", "docs", "faq"] },
+  { label: "Documentation", href: "/documentation", icon: BookOpen,     section: "Support",  keywords: ["docs", "api", "reference", "deployment", "troubleshooting", "config", "security", "grpc", "rest"] },
 ];
 
 export default function Header({

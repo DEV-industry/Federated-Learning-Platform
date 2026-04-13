@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3, Server, Shield, Settings, HelpCircle,
-  Download, Activity, LayoutDashboard, Cpu,
+  Download, Activity, LayoutDashboard, Cpu, BookOpen,
 } from "lucide-react";
 
 function NavItem({ icon: Icon, label, href }: { icon: any; label: string; href: string }) {
@@ -87,9 +87,9 @@ export default function Sidebar() {
           </div>
           <p className="text-white font-bold text-sm mb-0.5">Need help?</p>
           <p className="text-white/70 text-xs mb-3">Please check our docs</p>
-          <button className="w-full py-2 bg-white text-argon-primary text-xs font-bold rounded-argon hover:shadow-argon-sm transition-all">
+          <Link href="/documentation" className="w-full py-2 bg-white text-argon-primary text-xs font-bold rounded-argon hover:shadow-argon-sm transition-all block text-center">
             Documentation
-          </button>
+          </Link>
         </div>
       </div>
     </aside>
