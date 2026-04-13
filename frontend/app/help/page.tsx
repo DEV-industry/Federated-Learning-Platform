@@ -1,20 +1,49 @@
 "use client";
 import Header from "@/app/components/Header";
 
-export default function helpPage() {
+import FLPipelineInfographic from "./FLPipelineInfographic";
+import ArchitectureInfographic from "./ArchitectureInfographic";
+import FAQSection from "./FAQSection";
+import QuickStartGuides from "./QuickStartGuides";
+import CommandReference from "./CommandReference";
+
+export default function HelpPage() {
   return (
     <div className="flex flex-col">
       <Header onReset={() => {}} downloadUrl="#" title="Help Center" />
-      
-      <div className="argon-card p-10 flex flex-col items-center justify-center text-center mt-6 min-h-[50vh]">
-        <div className="w-16 h-16 bg-argon-lighter rounded-full flex items-center justify-center mb-4">
-          <svg className="w-8 h-8 text-argon-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+
+      <div className="flex flex-col gap-6 mt-2">
+        {/* Hero banner */}
+        <div className="argon-card overflow-hidden bg-gradient-to-r from-argon-primary via-[#825ee4] to-[#f5365c] p-8 text-white">
+          <div className="max-w-2xl">
+            <h2 className="text-2xl font-extrabold mb-2">Federated Learning Platform</h2>
+            <p className="text-white/80 text-sm leading-relaxed mb-4">
+              A production-grade platform for privacy-preserving distributed machine learning. This guide covers the system architecture,
+              training pipeline, security mechanisms, and how to operate the dashboard.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <span className="px-3 py-1.5 bg-white/15 backdrop-blur-sm rounded-full text-xs font-bold">Homomorphic Encryption</span>
+              <span className="px-3 py-1.5 bg-white/15 backdrop-blur-sm rounded-full text-xs font-bold">Byzantine Robustness</span>
+              <span className="px-3 py-1.5 bg-white/15 backdrop-blur-sm rounded-full text-xs font-bold">Differential Privacy</span>
+              <span className="px-3 py-1.5 bg-white/15 backdrop-blur-sm rounded-full text-xs font-bold">Real-Time Dashboard</span>
+            </div>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-argon-default mb-2">Under Construction</h2>
-        <p className="text-argon-muted max-w-md">The Help Center module is actively being developed. New capabilities will be available here soon.</p>
-        <button className="mt-8 argon-btn argon-btn-primary" onClick={() => window.history.back()}>
-          Go Back
-        </button>
+
+        {/* Dashboard modules guide */}
+        <QuickStartGuides />
+
+        {/* FL Pipeline Infographic */}
+        <FLPipelineInfographic />
+
+        {/* Architecture Infographic */}
+        <ArchitectureInfographic />
+
+        {/* FAQ */}
+        <FAQSection />
+
+        {/* Command reference */}
+        <CommandReference />
       </div>
     </div>
   );
