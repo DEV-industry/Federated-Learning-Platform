@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   BarChart3, Server, Shield, Settings, HelpCircle,
   Download, Activity, LayoutDashboard, Cpu, BookOpen,
@@ -13,18 +14,26 @@ function NavItem({ icon: Icon, label, href }: { icon: any; label: string; href: 
   return (
     <Link
       href={href}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-argon text-[0.8125rem] font-semibold transition-all duration-200 mb-0.5 ${active
-        ? "bg-argon-primary text-white shadow-argon-primary"
+      className={`relative w-full flex items-center gap-3 px-4 py-2.5 rounded-argon text-[0.8125rem] font-semibold transition-colors duration-200 mb-0.5 ${active
+        ? "text-white"
         : "text-argon-muted hover:bg-argon-lighter/50"
         }`}
     >
-      <div className={`w-8 h-8 rounded-argon flex items-center justify-center flex-shrink-0 ${active
+      {active && (
+        <motion.div
+          layoutId="sidebar-active-indicator"
+          className="absolute left-0 top-0 w-full h-full bg-argon-primary shadow-argon-primary rounded-argon -z-10"
+          initial={false}
+          transition={{ type: "spring", stiffness: 350, damping: 30 }}
+        />
+      )}
+      <div className={`w-8 h-8 rounded-argon flex items-center justify-center flex-shrink-0 transition-colors duration-200 ${active
         ? "bg-white/20"
         : "bg-white shadow-argon-sm"
         }`}>
-        <Icon className={`w-[14px] h-[14px] ${active ? "text-white" : "text-argon-primary"}`} />
+        <Icon className={`w-[14px] h-[14px] transition-colors duration-200 ${active ? "text-white" : "text-argon-primary"}`} />
       </div>
-      {label}
+      <span className="relative">{label}</span>
     </Link>
   );
 }
