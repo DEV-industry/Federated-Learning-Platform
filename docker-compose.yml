@@ -219,39 +219,6 @@ services:
     networks:
       - fl-network
 
-  node_client_3:
-    build:
-      context: ./node_client
-      args:
-        BUILDKIT_INLINE_CACHE: 1
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 768M
-    environment:
-      - AGGREGATOR_BASE_URL=https://aggregator:8443
-      - AGGREGATOR_GRPC_URL=aggregator:9443
-      - TLS_VERIFY=true
-      - TLS_CA_CERT_PATH=/certs/ca.crt
-      - NODE_ID=node-3
-      - NODE_PRIVATE_KEY_PATH=/tmp/node_identity_ed25519.pem
-      - NODE_ENROLLMENT_TOKEN=${FL_SECURITY_ENROLLMENT_TOKEN:-}
-      - CLIENT_VERSION=node-client-1.0.0
-      - DP_ENABLED=true
-      - HE_ENABLED=true
-      - HE_SHARED_CONTEXT_FILE=/app/shared_he_context_private.b64
-      - DATA_PARTITION_FRACTION=0.3
-      - DP_NOISE_MULTIPLIER=0.01
-      - FEDPROX_MU=${FEDPROX_MU}
-      - ENABLE_LOCAL_UI=false
-    volumes:
-      - ./certs:/certs:ro
-    depends_on:
-      aggregator:
-        condition: service_healthy
-    networks:
-      - fl-network
 
   he-sidecar:
     build: ./he_sidecar
